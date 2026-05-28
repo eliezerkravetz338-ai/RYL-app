@@ -1898,7 +1898,7 @@
       // No confirmation required (dev mode) — proceed
       STATE.user = data.user;
       STATE.profile = { id: data.user.id, display_name: displayName };
-      try { localStorage.clear(); } catch(e) {}
+      try { localStorage.removeItem('ryl_app_state_original_ui_clean_v2'); localStorage.removeItem('ryl_leagues_v1'); localStorage.removeItem('ryl_active_league_v1'); } catch(e) {}
       await loadState();
       STATE.authLoading = false;
       STATE.screen = STATE.leagues.length > 0 ? 'app' : 'landing';
@@ -1930,7 +1930,7 @@
       STATE.user = data.user;
       const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
       STATE.profile = profile;
-      try { localStorage.clear(); } catch(e) {}
+      try { localStorage.removeItem('ryl_app_state_original_ui_clean_v2'); localStorage.removeItem('ryl_leagues_v1'); localStorage.removeItem('ryl_active_league_v1'); } catch(e) {}
       await loadState();
       STATE.authLoading = false;
       STATE.screen = STATE.leagues.length > 0 ? 'app' : 'landing';
