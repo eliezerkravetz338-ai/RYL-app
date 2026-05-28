@@ -1676,7 +1676,14 @@
     // ── Supabase ──────────────────────────────────────────────────
     const SUPABASE_URL = 'https://rqkjqbhobblexghzxfhs.supabase.co';
     const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxa2pxYmhvYmJsZXhnaHp4ZmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MTQyMTMsImV4cCI6MjA5NTI5MDIxM30.f7VZQitDDLva-8I-quUwfjc5puun8KvO63ISxMMQhYs';
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storageKey: 'ryl-auth-token'
+      }
+    });
 
     // Legacy localStorage keys (kept for migration fallback)
     const STORAGE_KEY = 'ryl_app_state_original_ui_clean_v2';
