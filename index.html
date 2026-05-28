@@ -1732,6 +1732,8 @@
       joinName: '',                  // player name on join
       joinSkill: 0,                  // skill level 1-5
       justJoined: false,             // show success screen after joining
+      draftPreviewMode: false,         // captain/player previewing draft room
+      captainTab: 'team',              // captain home tab
       signupName: '',                // signup display name
     };
 
@@ -3048,14 +3050,15 @@
           </div>
 
           <!-- Status card -->
-          <div style='margin:16px;background:#fff;border-radius:14px;padding:16px;border:1px solid var(--b1);box-shadow:0 1px 4px rgba(0,0,0,.06)'>
-            <div style='display:flex;align-items:center;gap:12px'>
+          <div style='margin:16px 16px 0;background:#fff;border-radius:14px;padding:16px;border:1px solid var(--b1);box-shadow:0 1px 4px rgba(0,0,0,.06)'>
+            <div style='display:flex;align-items:center;gap:12px;margin-bottom:12px'>
               <div style='width:44px;height:44px;border-radius:50%;background:var(--gm);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0'>⏳</div>
               <div>
                 <div style='font-size:14px;font-weight:700;color:var(--t1)'>Waiting for Draft</div>
                 <div style='font-size:12px;color:var(--t3);margin-top:2px'>You'll get full access once the draft is complete</div>
               </div>
             </div>
+            <button onclick="STATE.draftPreviewMode=true;STATE.appTab='draft';R()" style='width:100%;padding:11px;background:#111;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer'>👁 Preview Draft Room</button>
           </div>
 
           <!-- Player pool -->
@@ -3101,77 +3104,139 @@
         </div>`;
     }
 
+    function getTeamInitials(name) {
+      if (!name || !name.trim()) return '??';
+      const words = name.trim().split(' ').filter(Boolean);
+      if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+      if (words.length === 2) return (words[0][0] + words[1][0]).toUpperCase();
+      return (words[0][0] + words[1][0] + words[2][0]).toUpperCase();
+    }
+
+    function teamLogoCircle(team, size) {
+      const sz = size || 40;
+      const initials = getTeamInitials(team ? team.name : '');
+      const color = (team && team.color) ? team.color : '#16a34a';
+      return '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+color+';display:flex;align-items:center;justify-content:center;font-family:\'Barlow Condensed\',sans-serif;font-weight:900;font-size:'+Math.round(sz*0.35)+'px;color:#fff;flex-shrink:0;border:2px solid rgba(255,255,255,.2);letter-spacing:-.5px">'+initials+'</div>';
+    }
+
     // ── CAPTAIN HOME ────────────────────────────────────────────────
     function renderCaptainHome() {
       const l = STATE.league;
       const myTeam = l.teams.find(t => t.id === STATE.memberTeamId);
       const myPlayers = l.players.filter(p => p.teamId === STATE.memberTeamId);
       const pool = l.players.filter(p => !p.teamId);
-      const myGames = l.games.filter(g => g.home === STATE.memberTeamId || g.away === STATE.memberTeamId);
-      const nextGame = myGames.find(g => g.status === 'upcoming' || g.status === 'live');
-      const opponent = nextGame ? l.teams.find(t => t.id === (nextGame.home === STATE.memberTeamId ? nextGame.away : nextGame.home)) : null;
+      const isDraftLive = l.draftState && l.draftState.status === 'active';
+      const isDraftDone = l.draftState?.status === 'done' || l.status === 'season' || l.status === 'playoffs' || l.status === 'complete';
+      const captainTab = STATE.captainTab || 'team';
+
+      // Tab switcher
+      const tabs = [
+        { k: 'team', lb: 'My Team' },
+        { k: 'pool', lb: 'Player Pool' },
+        { k: 'league', lb: 'The League' },
+      ];
+
+      const tabBar = `<div style='display:flex;border-bottom:2px solid var(--b1);background:#fff;position:sticky;top:56px;z-index:9'>
+        ${tabs.map(t => `<button onclick="STATE.captainTab='${t.k}';R()" style='flex:1;padding:12px 8px;border:none;background:none;font-size:13px;font-weight:${captainTab===t.k?800:500};color:${captainTab===t.k?"var(--t1)":"var(--t3)"};border-bottom:2px solid ${captainTab===t.k?"var(--t1)":"transparent"};margin-bottom:-2px;cursor:pointer'>${t.lb}</button>`).join('')}
+      </div>`;
+
+      // MY TEAM tab
+      const myTeamTab = `
+        <!-- Team name editor -->
+        <div style='background:#fff;border-radius:14px;padding:14px;border:1px solid var(--b1);box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px'>
+          <div style='font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px'>Team Name</div>
+          <div style='display:flex;gap:8px'>
+            <input id='captain-team-name' value='${myTeam?.name||''}' placeholder='Enter team name...' style='flex:1;padding:9px 12px;border:1.5px solid var(--b1);border-radius:8px;font-size:14px;font-weight:600;color:var(--t1);outline:none;background:#fff'>
+            <button onclick='saveCaptainTeamName()' style='padding:9px 16px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer'>Save</button>
+          </div>
+        </div>
+
+        <!-- Roster -->
+        <div style='background:#fff;border-radius:14px;border:1px solid var(--b1);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px'>
+          <div style='padding:12px 14px;border-bottom:1px solid var(--b1);background:var(--f4)'>
+            <div style='font-size:12px;font-weight:800;color:var(--t2)'>Roster <span style='color:var(--t3);font-weight:600'>(${myPlayers.length}/${l.ppt} players)</span></div>
+          </div>
+          ${myPlayers.length ? myPlayers.map(p => {
+            const isMe = p.userId === STATE.user?.id || p.id === STATE.user?.id;
+            return `<div style='display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--b1);background:${isMe?"rgba(22,163,74,.04)":"#fff"}'>
+              <div style='flex:1'>
+                <div style='font-size:13px;font-weight:${isMe?700:500};color:${isMe?"#16a34a":"var(--t1)"}'>${p.name}${isMe?` <span style='font-size:10px;font-weight:800;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:1px 5px'>You</span>`:''}</div>
+              </div>
+              ${p.skill ? `<span style='font-size:11px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:2px 7px'>★${p.skill}</span>` : ''}
+            </div>`;
+          }).join('') : `<div style='padding:24px;text-align:center'>
+            <div style='font-size:32px;margin-bottom:8px'>🏀</div>
+            <div style='font-size:14px;font-weight:700;color:var(--t1);margin-bottom:4px'>No players yet</div>
+            <div style='font-size:12px;color:var(--t3)'>Your roster fills up during the draft</div>
+          </div>`}
+        </div>
+
+        <!-- Draft room button -->
+        <button onclick="STATE.appTab='draft';STATE.draftPreviewMode=true;R()" style='width:100%;padding:14px;background:${isDraftLive?"#16a34a":"#111"};color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px'>
+          ${isDraftLive ? '🟢 Draft is LIVE — Enter Now' : '👁 Preview Draft Room'}
+        </button>`;
+
+      // PLAYER POOL tab
+      const poolTab = `
+        <div style='background:#fff;border-radius:14px;border:1px solid var(--b1);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)'>
+          <div style='padding:12px 14px;border-bottom:1px solid var(--b1);background:var(--f4);display:flex;align-items:center;justify-content:space-between'>
+            <div style='font-size:12px;font-weight:800;color:var(--t2)'>Available Players</div>
+            <span style='font-size:11px;font-weight:700;color:var(--t3);background:var(--f4);border:1px solid var(--b1);border-radius:999px;padding:2px 8px'>${pool.length} players</span>
+          </div>
+          ${pool.sort((a,b)=>(b.skill||0)-(a.skill||0)).map((p,i) => `
+            <div style='display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--b1)'>
+              <div style='font-size:12px;font-weight:700;color:var(--t3);min-width:22px;text-align:center'>${i+1}</div>
+              <div style='flex:1;font-size:13px;font-weight:500;color:var(--t1)'>${p.name}</div>
+              ${p.skill ? `<span style='font-size:11px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:2px 7px'>★${p.skill}</span>` : `<span style='font-size:10px;color:#94a3b8'>Unrated</span>`}
+            </div>`).join('')}
+        </div>`;
+
+      // LEAGUE tab
+      const leagueTab = `
+        <div style='background:#fff;border-radius:14px;border:1px solid var(--b1);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)'>
+          <div style='padding:12px 14px;border-bottom:1px solid var(--b1);background:var(--f4)'>
+            <div style='font-size:12px;font-weight:800;color:var(--t2)'>${l.teams.length} Teams · ${l.players.length} Players</div>
+          </div>
+          ${l.teams.map(t => {
+            const captain = l.players.find(p => p.id === t.captainId);
+            const isMyTeam = t.id === STATE.memberTeamId;
+            return `<div style='display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--b1);background:${isMyTeam?"rgba(22,163,74,.04)":"#fff"}'>
+              ${teamLogoCircle(t, 40)}
+              <div style='flex:1;min-width:0'>
+                <div style='font-size:14px;font-weight:${isMyTeam?800:600};color:${isMyTeam?"#16a34a":"var(--t1)"}'>${t.name||'Unnamed Team'}${isMyTeam?" <span style='font-size:10px;font-weight:800;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:1px 5px'>You</span>":""}</div>
+                <div style='font-size:11px;color:var(--t3);margin-top:2px'>${captain?`Captain: ${captain.name}`:'No captain yet'}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+
+      const activeTab = captainTab === 'team' ? myTeamTab : captainTab === 'pool' ? poolTab : leagueTab;
 
       return `
         <div style='min-height:100vh;background:var(--f8)'>
-          <!-- Captain header -->
-          <div style='background:linear-gradient(135deg,${myTeam?.color||"#16a34a"}dd,#0b1220);padding:24px 20px 28px;position:relative;overflow:hidden'>
-            <div style='position:absolute;inset:0;background:radial-gradient(circle at 10% 50%,rgba(255,255,255,.08),transparent 60%);pointer-events:none'></div>
-            <div style='position:relative;z-index:1'>
-              <div style='font-size:10px;font-weight:800;color:rgba(255,255,255,.5);letter-spacing:1.6px;text-transform:uppercase;margin-bottom:4px'>⚡ Captain</div>
-              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:36px;color:#fff;line-height:1;margin-bottom:4px'>${myTeam?.name||'Your Team'}</div>
-              <div style='font-size:13px;color:rgba(255,255,255,.5)'>${l.name}</div>
+          <!-- Hero banner -->
+          <div style='background:linear-gradient(135deg,${myTeam?.color||"#16a34a"}cc,#0b1220);padding:20px 16px 24px;position:relative;overflow:hidden'>
+            <div style='position:absolute;inset:0;background:radial-gradient(circle at 10% 50%,rgba(255,255,255,.1),transparent 60%);pointer-events:none'></div>
+            <div style='position:relative;z-index:1;display:flex;align-items:center;gap:14px'>
+              ${teamLogoCircle(myTeam, 56)}
+              <div style='flex:1;min-width:0'>
+                <div style='font-size:10px;font-weight:800;color:rgba(255,255,255,.5);letter-spacing:1.6px;text-transform:uppercase;margin-bottom:3px'>⚡ Captain · ${l.name}</div>
+                <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:32px;color:#fff;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>${myTeam?.name||'Your Team'}</div>
+                <div style='font-size:12px;color:rgba(255,255,255,.5);margin-top:3px'>${myPlayers.length}/${l.ppt} players drafted</div>
+              </div>
+            </div>
+            <!-- Draft status -->
+            <div style='margin-top:14px;padding:10px 14px;background:rgba(0,0,0,.25);border-radius:10px;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:8px'>
+              ${isDraftLive
+                ? `<span style='width:8px;height:8px;border-radius:50%;background:#22c55e;animation:pulseDot 1.2s infinite;flex-shrink:0'></span><span style='font-size:13px;font-weight:700;color:#22c55e'>Draft is LIVE</span>`
+                : isDraftDone
+                ? `<span style='font-size:13px;font-weight:700;color:#86efac'>✓ Draft Complete</span>`
+                : `<span style='font-size:13px;font-weight:600;color:rgba(255,255,255,.6)'>⏳ Waiting for commissioner to start draft</span>`}
             </div>
           </div>
 
-          <div style='padding:14px 16px;display:flex;flex-direction:column;gap:12px'>
-
-            <!-- Team name editor -->
-            <div style='background:#fff;border-radius:14px;padding:14px;border:1px solid var(--b1);box-shadow:0 1px 4px rgba(0,0,0,.06)'>
-              <div style='font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px'>Team Name</div>
-              <div style='display:flex;gap:8px'>
-                <input id='captain-team-name' value='${myTeam?.name||''}' placeholder='Enter team name...' style='flex:1;padding:9px 12px;border:1.5px solid var(--b1);border-radius:8px;font-size:14px;font-weight:600;color:var(--t1);outline:none;background:#fff'>
-                <button onclick='saveCaptainTeamName()' style='padding:9px 16px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer'>Save</button>
-              </div>
-            </div>
-
-            <!-- Next game -->
-            ${nextGame && opponent ? `
-            <div style='background:#fff;border-radius:14px;padding:14px;border:1px solid var(--b1);box-shadow:0 1px 4px rgba(0,0,0,.06)'>
-              <div style='font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px'>${nextGame.status==='live'?'🔴 Live Now':'Next Game'}</div>
-              <div style='font-size:16px;font-weight:700;color:var(--t1)'>${myTeam?.name||'Your Team'} vs ${opponent.name}</div>
-              <div style='font-size:12px;color:var(--t3);margin-top:4px'>Game Day ${nextGame.gameNum} · ${nextGame.time||'TBD'} · ${nextGame.court||''}</div>
-            </div>` : ''}
-
-            <!-- Roster -->
-            <div style='background:#fff;border-radius:14px;border:1px solid var(--b1);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)'>
-              <div style='padding:12px 14px;border-bottom:1px solid var(--b1);background:var(--f4)'>
-                <div style='font-size:12px;font-weight:800;color:var(--t2)'>Your Roster <span style='color:var(--t3);font-weight:600'>(${myPlayers.length} players)</span></div>
-              </div>
-              ${myPlayers.length ? myPlayers.map(p => {
-                const isMe = p.userId === STATE.user?.id || p.id === STATE.user?.id;
-                return `<div style='display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--b1);background:${isMe?"rgba(22,163,74,.04)":"#fff"}'>
-                  <div style='flex:1'>
-                    <div style='font-size:13px;font-weight:${isMe?700:500};color:${isMe?"#16a34a":"var(--t1)"}'>${p.name}${isMe?` <span style='font-size:10px;font-weight:800;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:1px 5px'>You</span>`:''}</div>
-                  </div>
-                  ${p.skill ? `<span style='font-size:11px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:2px 7px'>★${p.skill}</span>` : ''}
-                </div>`;
-              }).join('') : `<div style='padding:20px;text-align:center;color:var(--t3);font-size:13px'>No players yet — draft starts soon</div>`}
-            </div>
-
-            <!-- Player pool -->
-            <div style='background:#fff;border-radius:14px;border:1px solid var(--b1);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)'>
-              <div style='padding:12px 14px;border-bottom:1px solid var(--b1);background:var(--f4)'>
-                <div style='font-size:12px;font-weight:800;color:var(--t2)'>Player Pool <span style='color:var(--t3);font-weight:600'>(${pool.length} available)</span></div>
-              </div>
-              ${pool.sort((a,b)=>(b.skill||0)-(a.skill||0)).map((p,i) => `
-                <div style='display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--b1)'>
-                  <div style='font-size:12px;font-weight:700;color:var(--t3);min-width:20px'>${i+1}</div>
-                  <div style='flex:1;font-size:13px;font-weight:500;color:var(--t1)'>${p.name}</div>
-                  ${p.skill ? `<span style='font-size:11px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:2px 7px'>★${p.skill}</span>` : `<span style='font-size:10px;color:#94a3b8'>Unrated</span>`}
-                </div>`).join('')}
-            </div>
-
-          </div>
+          ${tabBar}
+          <div style='padding:14px 16px 24px'>${activeTab}</div>
         </div>`;
     }
 
@@ -4663,8 +4728,15 @@
       if (STATE.draftRecap) return renderDraftRecap();
       const l = STATE.league;
       const ds = l.draftState;
+      // Preview mode banner for captains/players previewing before draft starts
+      const previewBanner = STATE.draftPreviewMode ? `
+        <div style='position:fixed;top:0;left:0;right:0;z-index:999;background:#f59e0b;padding:8px 16px;display:flex;align-items:center;justify-content:space-between'>
+          <span style='font-size:13px;font-weight:800;color:#000'>👁 Preview Mode — Draft hasn't started yet</span>
+          <button onclick="STATE.draftPreviewMode=false;STATE.appTab='home';R()" style='background:#000;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer'>← Back</button>
+        </div>` : '';
+      const previewOffset = STATE.draftPreviewMode ? 'margin-top:40px' : '';
       // Mobile-first: use simple layout on narrow screens
-      if (ds && window.innerWidth < 640) return renderDraftMobile();
+      if (ds && window.innerWidth < 640) return previewBanner + renderDraftMobile();
       if (!ds) {
         return `<div class='ph'><div class='ph-title'>Draft Room</div><div class='ph-sub'>Get the board ready, then start the draft from Commissioner.</div></div><div class='empty-s'><h3>Draft not started</h3><p>Start the draft from the Commissioner tab when captains are ready.</p></div>`;
       }
