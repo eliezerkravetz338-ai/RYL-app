@@ -30,7 +30,7 @@
     }
     button, input, select, textarea { font-family: 'DM Sans', sans-serif; }
     button { cursor: pointer; border: none; transition: all .15s; }
-    .nav { height: 52px; background: var(--n1); border-bottom: 1px solid rgba(255,255,255,.06); display:flex; align-items:center; justify-content:space-between; padding:0 18px; position:sticky; top:0; z-index:20; }
+    .nav { height: 52px; background: var(--n1); border-bottom: 1px solid rgba(255,255,255,.06); display:flex; align-items:center; justify-content:space-between; padding:0 18px; position:sticky; top:0; z-index:1000; }
     .logo-mark { background: var(--g); color:#fff; font-family:'Barlow Condensed',sans-serif; font-weight:900; font-size:13px; padding:3px 7px; border-radius:5px; letter-spacing:.5px; }
     .logo-text { font-family:'Barlow Condensed',sans-serif; font-weight:800; font-size:16px; color:#fff; letter-spacing:.3px; margin-left:7px; }
     .nav-tabs { display:flex; gap:1px; margin-left:20px; overflow:auto; }
@@ -1810,13 +1810,15 @@
               if (active) {
                 STATE.league = active;
                 STATE.activeLeagueId = active.id;
-                // Set role from membership
+                // Set role from membership for active league
                 const myMembership = memberships.find(m => m.league_id === active.id);
                 if (myMembership) {
                   STATE.memberRole = myMembership.role;
                   STATE.memberTeamId = myMembership.team_id;
                 }
               }
+              // Store all memberships for league switching
+              STATE.allMemberships = memberships;
               STATE.screen = 'app';
             }
           }
@@ -2208,7 +2210,14 @@
       STATE.commSchedDay = null;
       STATE.showLeagueSwitcher = false;
       STATE.screen = 'app';
+      STATE.captainTab = 'team';
       localStorage.setItem(ACTIVE_LEAGUE_KEY, leagueId);
+      // Update role for this league
+      if (STATE.allMemberships) {
+        const m = STATE.allMemberships.find(m => m.league_id === leagueId);
+        if (m) { STATE.memberRole = m.role; STATE.memberTeamId = m.team_id; }
+        else { STATE.memberRole = 'commissioner'; STATE.memberTeamId = null; }
+      }
       subscribeToLeague(leagueId);
       R();
     }
@@ -3052,7 +3061,7 @@
     // ── PLAYER WAITING SCREEN ──────────────────────────────────────
     function renderWaiting() {
       const l = STATE.league;
-      const pool = l.players || [];
+      const pool = (l.players || []).filter(p => !p.isCaptain);
       return `
         <div style='min-height:100vh;background:var(--f8)'>
           <!-- Header -->
@@ -3514,7 +3523,7 @@
       const claimed = l.teams.filter(t => t.cap && t.cap.trim() !== '').length;
       const ready = claimed === l.teams.length;
       const order = l.draftOrder?.length ? l.draftOrder.map(id => l.teams.find(t => t.id === id)).filter(Boolean) : l.teams;
-      const pool = l.players;
+      const pool = l.players.filter(p => !p.isCaptain);
       return `<div>
         <div class='lobby-hero'>
           <div class='lobby-div'>Pre-Draft Lobby</div>
