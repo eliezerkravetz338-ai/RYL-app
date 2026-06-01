@@ -7092,6 +7092,23 @@ async function assignCaptain(playerId, teamId) {
 
     // Internal tests removed from production build to avoid mutating app state.
 
+    // ── Expose functions globally so onclick handlers can reach them ──
+    window.confirmSignOut = confirmSignOut;
+    window.signOut = signOut;
+    window.showLeagueCode = showLeagueCode;
+    window.copyFullMessage = copyFullMessage;
+    window.shareLeagueCode = shareLeagueCode;
+    window.joinLeagueByCode = joinLeagueByCode;
+    window.handleAuth = handleAuth;
+    window.refreshLeagueFromDB = refreshLeagueFromDB;
+    window.assignCaptain = assignCaptain;
+    window.removeCaptain = removeCaptain;
+    window.openAssignCaptain = openAssignCaptain;
+    window.saveCaptainTeamName = saveCaptainTeamName;
+    window.switchLeague = switchLeague;
+    window.createNewLeague = createNewLeague;
+    window.closeModal = closeModal;
+
     // ── Boot sequence ──────────────────────────────────────────────
     (async () => {
       STATE.authLoading = true;
