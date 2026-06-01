@@ -2008,6 +2008,18 @@
       showLeagueCode();
     }
 
+    function confirmSignOut() {
+      openModal('Sign Out?',
+        `<div style='text-align:center;padding:8px 0'>
+          <div style='font-size:32px;margin-bottom:10px'>👋</div>
+          <div style='font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px'>Are you sure you want to sign out?</div>
+          <div style='font-size:12px;color:var(--t2)'>You can always sign back in with your email and password.</div>
+        </div>`,
+        `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Cancel</button>
+         <button class='btn btn-sm' style='background:#dc2626;color:#fff;border:none' onclick='closeModal();signOut()'>Yes, Sign Out</button>`
+      );
+    }
+
     async function signOut() {
       clearInterval(STATE.draftTimer);
       await sb.auth.signOut();
@@ -2017,6 +2029,7 @@
       STATE.leagues = [];
       STATE.activeLeagueId = null;
       STATE.memberRole = null;
+      STATE.memberTeamId = null;
       STATE.screen = 'auth';
       R();
     }
@@ -3250,11 +3263,15 @@
         { k: 'rosters', lb: 'Rosters' },
       ];
       return `<div class='nav' style='position:sticky;top:0;z-index:20'>
-        <div style='display:flex;align-items:center;gap:8px'>
+        <div style='display:flex;align-items:center;gap:8px;flex:1;min-width:0'>
           <div style='width:28px;height:28px;border-radius:50%;background:${myTeam?.color||"#16a34a"};flex-shrink:0'></div>
-          <span style='font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px'>${myTeam?.name||'My Team'}</span>
+          <span style='font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px'>${myTeam?.name||'My Team'}</span>
         </div>
         <div class='nav-tabs'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''}' onclick="STATE.appTab='${t.k}';R()">${t.lb}</button>`).join('')}</div>
+        <div class='nav-right' style='display:flex;align-items:center;gap:6px'>
+          ${STATE.leagues.length > 1 ? `<button onclick="STATE.showLeagueSwitcher=!STATE.showLeagueSwitcher;R()" style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer'>Leagues ${STATE.showLeagueSwitcher?'▲':'▼'}</button>` : ''}
+          <button onclick='confirmSignOut()' style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer'>Sign Out</button>
+        </div>
       </div>`;
     }
 
@@ -5463,7 +5480,7 @@ async function assignCaptain(playerId, teamId) {
       await sb.from('league_members').update({ role: 'player', team_id: null })
         .eq('league_id', l.id).eq('user_id', player.userId || player.id);
       l.teams = l.teams.map(t => t.captainId === playerId ? { ...t, captainId: null, captainName: null } : t);
-      l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: false, captainTeamId: null } : p);
+      l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: false, captainTeamId: null, teamId: null } : p);
       await saveState();
       R();
     }
@@ -6986,7 +7003,7 @@ async function assignCaptain(playerId, teamId) {
           <span style='color:rgba(255,255,255,.4);font-size:10px;flex-shrink:0'>${STATE.showLeagueSwitcher?'▲':'▼'}</span>
         </button>
       </div><div class='nav-tabs'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''} ${t.cls||''}' onclick="STATE.appTab='${t.k}';STATE.rosterFocus=null;STATE.draftRecap=false;R()">${t.lb}</button>`).join('')}</div></div><div class='nav-right' style='display:flex;align-items:center;gap:8px'>
-        ${STATE.user ? `<button onclick='signOut()' style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer' title='Sign out'>↩</button>` : ''}
+        ${STATE.user ? `<button onclick='confirmSignOut()' style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer' title='Sign out'>Sign Out</button>` : ''}
             <span style='background:${(l.seasonHistory||[]).length>0?"rgba(245,158,11,.15)":"rgba(255,255,255,.07)"};border:1px solid ${(l.seasonHistory||[]).length>0?"rgba(245,158,11,.3)":"rgba(255,255,255,.1)"};color:${(l.seasonHistory||[]).length>0?"#f59e0b":"rgba(255,255,255,.4)"};font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px'>
               S${((l.seasonHistory||[]).length||0)+1}
             </span>
