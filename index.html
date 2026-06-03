@@ -1766,6 +1766,8 @@
 
       // If logged in, persist to Supabase
       if (STATE.user && STATE.activeLeagueId && STATE.league) {
+        if (_saving) return;
+        _saving = true;
         const { error: saveErr } = await sb.from('leagues').upsert({
           id: STATE.activeLeagueId,
           name: STATE.league.name || 'My League',
@@ -1776,6 +1778,7 @@
         if (saveErr) {
           console.error('saveState failed:', saveErr.message);
         }
+        setTimeout(() => { _saving = false; }, 500);
       } else {
         // Not logged in — use localStorage as fallback
         try {
@@ -2154,6 +2157,7 @@
 
     // ── Realtime subscription ──────────────────────────────────────
     let _realtimeChannel = null;
+    let _saving = false;
 
     function subscribeToLeague(leagueId) {
       if (_realtimeChannel) _realtimeChannel.unsubscribe();
@@ -2165,7 +2169,8 @@
           schema: 'public',
           table: 'leagues',
           filter: 'id=eq.' + leagueId
-        }, payload => {
+       }, payload => {
+          if (_saving) return;
           const updated = { ...payload.new.data, id: payload.new.id, name: payload.new.name };
           STATE.league = updated;
           const idx = STATE.leagues.findIndex(l => l.id === leagueId);
