@@ -4644,12 +4644,14 @@
           const queue = ds.queue || [];
           const currentTid = (ds.status === 'active' || ds.status === 'paused') ? getPickTeam(ds, l.teams) : null;
           const currentTeam = l.teams.find(t => t.id === currentTid);
+          const isMyTurn = STATE.memberRole === 'captain' && STATE.memberTeamId === currentTid;
+          const isCapt = STATE.memberRole === 'captain';
           const currentRound = Math.floor(ds.idx / l.teams.length) + 1;
           const totalRounds = Math.ceil(ds.total / l.teams.length);
           const recentPick = ds.picks.at(-1);
           const recentTeam = recentPick ? l.teams.find(t => t.id === recentPick.tid) : null;
           const search = (STATE.searchDraft || '').toLowerCase();
-          const avail = l.players.filter(p => !p.teamId && p.name.toLowerCase().includes(search));
+          const avail = l.players.filter(p => !p.teamId && !(p.isCaptain || l.teams.some(t => t.captainId === p.id)) && p.name.toLowerCase().includes(search));
           const currentRosterCount = currentTeam ? l.players.filter(p => p.teamId === currentTeam.id).length : 0;
           const timerColor = ds.secs <= 10 ? '#ef4444' : ds.secs <= 20 ? '#f59e0b' : '#22c55e';
           const timerPct = Math.max(0, (ds.secs / l.timerSecs) * 100);
@@ -4716,7 +4718,7 @@
                     </div>
                     <div style='display:flex;gap:6px;flex-shrink:0'>
                       <button onclick="STATE.league.draftState.queue=${inQueue?`STATE.league.draftState.queue.filter(id=>id!=='${p.id}')`:`[...STATE.league.draftState.queue,'${p.id}']`};R()" style='padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;border:1.5px solid ${inQueue?'#22c55e':'var(--b2)'};background:${inQueue?'rgba(34,197,94,.08)':'#fff'};color:${inQueue?'#16a34a':'var(--t2)'};cursor:pointer'>${inQueue?'✓ Q':'Queue'}</button>
-                      ${!isDone ? `<button onclick="doPick('${p.id}')" style='padding:7px 16px;border-radius:8px;font-size:13px;font-weight:800;background:var(--g);color:#fff;border:none;cursor:pointer'>Draft</button>` : ''}
+                      ${!isDone ? isMyTurn ? `<button onclick="doPick('${p.id}')" style='padding:7px 16px;border-radius:8px;font-size:13px;font-weight:800;background:var(--g);color:#fff;border:none;cursor:pointer'>Draft</button>` : isCapt ? `<button style='padding:7px 16px;border-radius:8px;font-size:13px;font-weight:800;background:#94a3b8;color:#fff;border:none;cursor:not-allowed;opacity:.5' disabled>Wait</button>` : '' : ''}
                     </div>
                   </div>`;
                 }).join('') : `<div style='padding:40px 20px;text-align:center;color:var(--t3)'><div style='font-size:16px;font-weight:700;color:var(--t1);margin-bottom:6px'>No players found</div><div style='font-size:13px'>Try clearing the search.</div></div>`}
@@ -4798,11 +4800,13 @@
       const queue = ds.queue || [];
       const currentTid = (ds.status === 'active' || ds.status === 'paused') ? getPickTeam(ds, l.teams) : null;
       const currentTeam = l.teams.find(t => t.id === currentTid);
+      const isMyTurn = STATE.memberRole === 'captain' && STATE.memberTeamId === currentTid;
+      const isCapt = STATE.memberRole === 'captain';
       const currentRound = Math.floor(ds.idx / l.teams.length) + 1;
       const pickInRound = (ds.idx % l.teams.length) + 1;
       const totalRounds = Math.ceil(ds.total / l.teams.length);
       const search = (STATE.searchDraft || '').toLowerCase();
-      const avail = l.players.filter(p => !p.teamId && p.name.toLowerCase().includes(search));
+      const avail = l.players.filter(p => !p.teamId && !(p.isCaptain || l.teams.some(t => t.captainId === p.id)) && p.name.toLowerCase().includes(search));
       const recentPicks = ds.picks.slice(-8).reverse();
       const currentRosterCount = currentTeam ? l.players.filter(p => p.teamId === currentTeam.id).length : 0;
       const spotsLeft = currentTeam ? Math.max(0, l.ppt - currentRosterCount) : 0;
@@ -4883,7 +4887,7 @@
           <div class='player-board-scroll' style='max-height:700px;overflow-y:auto'>
             <div class='board-hd sticky-player-search' style='position:sticky;top:0;z-index:4;background:#fff;border-bottom:1px solid var(--b1);padding:12px 14px'><h3 style='color:var(--t1)'>Available Players</h3><input id='draftSearch' class='board-search' style='background:#fff;border:1px solid var(--b2);color:var(--t1);width:140px' placeholder='Search' value='${STATE.searchDraft || ''}' oninput='handleDraftSearchInput(this)'></div>
             <div class='board-col-hd' style='position:sticky;top:51px;z-index:3;background:var(--f4);border-bottom:1px solid var(--b1)'><span style='color:var(--t3)'>#</span><span style='color:var(--t3)'>Player</span><span></span><span style='color:var(--t3)'>Action</span></div>
-            ${avail.length ? avail.map((p, i) => `<div class='pl-row' style='background:#fff;border-bottom:1px solid var(--b1);padding-top:10px;padding-bottom:10px'><div class='pl-rank' style='color:var(--t3)'>${i + 1}</div><div class='pl-nm' style='color:var(--t1) !important;font-weight:800;display:block;text-shadow:none'>${queue.includes(p.id) ? `<span class='queue-pill' style='background:#14532d;color:#dcfce7;border:1px solid #22c55e'>${queue.indexOf(p.id)+1}</span>` : ''}${p.name}</div><div class='pl-rank' style='color:var(--t3)'></div><div class='pl-acts'><button class='q-btn ${queue.includes(p.id) ? 'in' : ''}' onclick="STATE.league.draftState.queue=${queue.includes(p.id) ? `STATE.league.draftState.queue.filter(id=>id!=='${p.id}')` : `[...STATE.league.draftState.queue,'${p.id}']`};R()">${queue.includes(p.id) ? 'Queued' : 'Queue'}</button>${ds.status !== 'done' ? `<button class='draft-btn' onclick="doPick('${p.id}')">Draft</button>` : ''}</div></div>`).join('') : `<div class='empty-s' style='color:var(--t3);padding:42px 20px'><h3 style='color:var(--t1)'>No players found</h3><p>Try clearing the search or add more players to the pool.</p></div>`}
+            ${avail.length ? avail.map((p, i) => `<div class='pl-row' style='background:#fff;border-bottom:1px solid var(--b1);padding-top:10px;padding-bottom:10px'><div class='pl-rank' style='color:var(--t3)'>${i + 1}</div><div class='pl-nm' style='color:var(--t1) !important;font-weight:800;display:block;text-shadow:none'>${queue.includes(p.id) ? `<span class='queue-pill' style='background:#14532d;color:#dcfce7;border:1px solid #22c55e'>${queue.indexOf(p.id)+1}</span>` : ''}${p.name}</div><div class='pl-rank' style='color:var(--t3)'></div><div class='pl-acts'><button class='q-btn ${queue.includes(p.id) ? 'in' : ''}' onclick="STATE.league.draftState.queue=${queue.includes(p.id) ? `STATE.league.draftState.queue.filter(id=>id!=='${p.id}')` : `[...STATE.league.draftState.queue,'${p.id}']`};R()">${queue.includes(p.id) ? 'Queued' : 'Queue'}</button>${ds.status !== 'done' ? isMyTurn ? `<button class='draft-btn' onclick="doPick('${p.id}')">Draft</button>` : isCapt ? `<button class='draft-btn' style='opacity:.35;cursor:not-allowed' disabled>Wait</button>` : '' : ''}</div></div>`).join('') : `<div class='empty-s' style='color:var(--t3);padding:42px 20px'><h3 style='color:var(--t1)'>No players found</h3><p>Try clearing the search or add more players to the pool.</p></div>`}
           </div>
         </div>
         <div>
