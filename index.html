@@ -2971,7 +2971,7 @@
       );
     }
     function reopenDraft() { const l = STATE.league; STATE.league = { ...l, status: 'lobby', draftState: null, players: l.players.map(p => ({ ...p, teamId: null })) }; STATE.appTab = 'home'; clearInterval(STATE.draftTimer); R(); }
-    function beginDraftTransition() { clearTimeout(STATE.transitionTimeout); STATE.league.status = 'transition'; STATE.league.transitionMode = 'draft'; R(); STATE.transitionTimeout = setTimeout(() => { startDraftNow(); }, 1800); }
+    function beginDraftTransition() { clearTimeout(STATE.transitionTimeout); STATE.league.status = 'transition'; STATE.league.transitionMode = 'draft'; _saving = false; R(); STATE.transitionTimeout = setTimeout(() => { startDraftNow(); }, 1800); }
     function skipPlayoffsEndSeason() {
       const l = STATE.league;
       const standings = getStandingsRows(l);
@@ -3002,7 +3002,7 @@
         champion: champion.id,
         skipped: true
       };
-      saveState();
+      _saving = false; saveState();
       STATE.showRecap = true;
       R();
     }
@@ -3042,11 +3042,11 @@
       clearTimeout(STATE.transitionTimeout);
       // Show transition screen first, then switch to playoffs
       STATE.league = { ...STATE.league, transitionMode: 'playoff', status: 'transition' };
-      R();
+      _saving = false; R();
       STATE.transitionTimeout = setTimeout(() => {
         STATE.league = { ...STATE.league, transitionMode: null, status: 'playoffs' };
         STATE.appTab = 'playoffs';
-        saveState();
+        _saving = false; saveState();
         R();
       }, 3200);
     }
@@ -6803,7 +6803,7 @@ async function assignCaptain(playerId, teamId) {
       STATE.appTab         = keepRosters ? 'home' : 'commissioner';
       STATE.commTab        = 'league';
 
-      saveState();
+      _saving = false; saveState();
       R();
     }
 
@@ -6837,7 +6837,7 @@ async function assignCaptain(playerId, teamId) {
       STATE.showRecap = false; STATE.showChampCard = false;
       STATE.showNextSeason = false; STATE.s2KeepRosters = undefined;
       STATE.appTab = 'commissioner'; STATE.commTab = 'league';
-      saveState(); R();
+      _saving = false; saveState(); R();
     }
 
     function confirmStartSeason() {
