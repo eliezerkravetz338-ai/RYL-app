@@ -2009,31 +2009,23 @@
     function copyLeagueCode(code, btn) {
       showLeagueCode();
     }
-
+    
     function confirmSignOut() {
-      openModal('Sign Out?',
-        `<div style='text-align:center;padding:8px 0'>
-          <div style='font-size:32px;margin-bottom:10px'>👋</div>
-          <div style='font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px'>Are you sure you want to sign out?</div>
-          <div style='font-size:12px;color:var(--t2)'>You can always sign back in with your email and password.</div>
-        </div>`,
-        `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Cancel</button>
-         <button class='btn btn-sm' style='background:#dc2626;color:#fff;border:none' onclick='closeModal();signOut()'>Yes, Sign Out</button>`
-      );
+      if (window.confirm('Sign out of RYL? You can sign back in anytime with your email and password.')) {
+        signOut();
+      }
     }
-
     async function signOut() {
       clearInterval(STATE.draftTimer);
-      await sb.auth.signOut();
-      STATE.user = null;
-      STATE.profile = null;
-      STATE.league = null;
-      STATE.leagues = [];
-      STATE.activeLeagueId = null;
-      STATE.memberRole = null;
-      STATE.memberTeamId = null;
+      try { if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; } } catch (e) {}
+      try { await sb.auth.signOut(); } catch (e) { console.warn('signOut error', e); }
+      clearSavedState();
+      try { localStorage.removeItem('ryl-auth-token'); } catch (e) {}
+      STATE.user = null; STATE.profile = null; STATE.league = null; STATE.leagues = [];
+      STATE.activeLeagueId = null; STATE.memberRole = null; STATE.memberTeamId = null;
+      STATE.allMemberships = null; STATE.draftPreviewMode = false; STATE.justJoined = false;
       STATE.screen = 'auth';
-      R();
+      window.location.reload();
     }
 
     async function createLeagueInDB(league) {
