@@ -3563,7 +3563,7 @@
                   ${teamAvatar(t, 'tm-av')}
                   <div class='lobby-row-main'>
                     <div class='lobby-row-title'>${t.name || 'Unnamed Team'}</div>
-                    <div class='lobby-row-sub'>${t.cap ? `Captain: ${t.cap}` : 'Captain not set'}</div>
+                    <div class='lobby-row-sub'>${(t.captainId || t.cap) ? `Captain: ${t.captainName || t.cap || ''}` : 'Captain not set'}</div>
                   </div>
                 </div>`).join('')}
               </div>
