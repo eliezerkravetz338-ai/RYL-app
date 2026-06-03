@@ -3512,7 +3512,7 @@
     // renderJoin replaced by Supabase version above
     function renderLobby() {
       const l = STATE.league;
-      const claimed = l.teams.filter(t => t.cap && t.cap.trim() !== '').length;
+      const claimed = l.teams.filter(t => (t.cap && t.cap.trim() !== '') || t.captainId).length;
       const ready = claimed === l.teams.length;
       const order = l.draftOrder?.length ? l.draftOrder.map(id => l.teams.find(t => t.id === id)).filter(Boolean) : l.teams;
       const pool = l.players.filter(p => !p.isCaptain);
@@ -3573,9 +3573,9 @@
                   ${teamAvatar(t, 'tm-av')}
                   <div class='lobby-row-main'>
                     <div class='lobby-row-title'>${t.name || 'Unnamed Team'}</div>
-                    <div class='lobby-row-sub'>${t.cap ? t.cap : 'Waiting for captain'}</div>
+                    <div class='lobby-row-sub'>${(t.captainId || t.cap) ? `Captain: ${t.captainName || t.cap || ''}` : 'Waiting for captain'}</div>
                   </div>
-                  <span class='${t.cap ? 'lobby-pill-ok' : 'lobby-pill-wait'}'>${t.cap ? 'Set' : 'Open'}</span>
+                  <span class='${(t.captainId || t.cap) ? 'lobby-pill-ok' : 'lobby-pill-wait'}'>${(t.captainId || t.cap) ? 'Set' : 'Open'}</span>
                 </div>`).join('')}
               </div>
             </div>
@@ -5465,11 +5465,11 @@ async function assignCaptain(playerId, teamId) {
       const player = l.players.find(p => p.id === playerId);
       const team = l.teams.find(t => t.id === teamId);
       if (!player || !team) return;
-      await sb.from('league_members').update({ role: 'captain', team_id: teamId })
-        .eq('league_id', l.id).eq('user_id', player.userId || player.id);
       l.teams = l.teams.map(t => t.id === teamId ? { ...t, captainId: playerId, captainName: player.name, cap: player.name } : t);
       l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: true, captainTeamId: teamId } : p);
       await saveState();
+      await sb.from('league_members').update({ role: 'captain', team_id: teamId })
+        .eq('league_id', l.id).eq('user_id', player.userId || player.id);
       closeModal();
       R();
     }
@@ -5478,11 +5478,11 @@ async function assignCaptain(playerId, teamId) {
       const l = STATE.league;
       const player = l.players.find(p => p.id === playerId);
       if (!player) return;
-      await sb.from('league_members').update({ role: 'player', team_id: null })
-        .eq('league_id', l.id).eq('user_id', player.userId || player.id);
       l.teams = l.teams.map(t => t.captainId === playerId ? { ...t, captainId: null, captainName: null, cap: '' } : t);
       l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: false, captainTeamId: null, teamId: null } : p);
       await saveState();
+      await sb.from('league_members').update({ role: 'player', team_id: null })
+        .eq('league_id', l.id).eq('user_id', player.userId || player.id);
       R();
     }
 
