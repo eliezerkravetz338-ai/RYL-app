@@ -2365,7 +2365,7 @@
     function getPickStatus(teamId, league) { const ds = league?.draftState; if (!ds || (ds.status !== 'active' && ds.status !== 'paused')) return ''; const n = league.teams.length; for (let i = 0; i < Math.min(n * 2, ds.total - ds.idx); i++) { const clone = { ...ds, idx: ds.idx + i }; const tid = getPickTeam(clone, league.teams); if (tid === teamId) { if (i === 0) return 'ON THE CLOCK'; if (i === 1) return 'PICKS NEXT'; if (i === 2) return 'IN 2'; return ''; } } return ''; }
     function doPickOnLeague(l, pid) { const ds = l.draftState; if (!ds || ds.status !== 'active') return l; const player = l.players.find(p => p.id === pid); if (!player || player.teamId) return l; const tid = getPickTeam(ds, l.teams); const newPlayers = l.players.map(p => p.id === pid ? { ...p, teamId: tid } : p); const newPicks = [...ds.picks, { num: ds.idx + 1, tid, pn: player.name }]; const newIdx = ds.idx + 1; const newQueue = (ds.queue || []).filter(id => id !== pid); const avail = newPlayers.filter(p => !p.teamId && !(p.isCaptain || l.teams.some(t => t.captainId === p.id))); const isDone = newIdx >= ds.total || avail.length === 0; return { ...l, players: newPlayers, draftState: { ...ds, picks: newPicks, idx: newIdx, secs: l.timerSecs, queue: newQueue, status: isDone ? 'done' : 'active' }, status: isDone ? 'season' : l.status }; }
     function undoLastPick() { if (!STATE.lastPickSnapshot) return; const snapshot = STATE.lastPickSnapshot; if (!snapshot?.draftState) return; clearInterval(STATE.draftTimer); STATE.league = snapshot; STATE.lastPickSnapshot = null; STATE.draftFlash = null; if (STATE.league.draftState?.status === 'active') startTimer(); R(); }
-    function doPick(pid) { const before = STATE.league; const ds = before?.draftState; const player = before?.players.find(p => p.id === pid); const currentTid = ds ? getPickTeam(ds, before.teams) : null; const currentTeam = before?.teams.find(t => t.id === currentTid); clearInterval(STATE.draftTimer); STATE.lastPickSnapshot = JSON.parse(JSON.stringify(STATE.league)); STATE.league = doPickOnLeague(STATE.league, pid); if (currentTeam && player && ds) { STATE.draftFlash = { team: currentTeam.name, player: player.name, pickNum: ds.idx + 1, color: currentTeam.color }; clearTimeout(STATE.draftFlashTimeout); STATE.draftFlashTimeout = setTimeout(() => { STATE.draftFlash = null; R(); }, 1200); } if (STATE.league.draftState?.status === 'active') startTimer(); if (STATE.league.draftState?.status === 'done') { STATE.league.seasonEntered = false; STATE.appTab = 'draft'; } R(); }
+    function doPick(pid) { const before = STATE.league; const ds = before?.draftState; const player = before?.players.find(p => p.id === pid); const currentTid = ds ? getPickTeam(ds, before.teams) : null; const currentTeam = before?.teams.find(t => t.id === currentTid); clearInterval(STATE.draftTimer); STATE.lastPickSnapshot = JSON.parse(JSON.stringify(STATE.league)); STATE.league = doPickOnLeague(STATE.league, pid); if (currentTeam && player && ds) { STATE.draftFlash = { team: currentTeam.name, player: player.name, pickNum: ds.idx + 1, color: currentTeam.color }; clearTimeout(STATE.draftFlashTimeout); STATE.draftFlashTimeout = setTimeout(() => { STATE.draftFlash = null; R(); }, 1200); } if (STATE.league.draftState?.status === 'active') startTimer(); if (STATE.league.draftState?.status === 'done') { STATE.league.seasonEntered = false; STATE.appTab = 'draft'; } _saving = false; R(); }
     function startTimer() { const l = STATE.league; if (!l?.draftState || l.draftState.status !== 'active') return; clearInterval(STATE.draftTimer); STATE.draftTimer = setInterval(() => { if (!STATE.league?.draftState || STATE.league.draftState.status !== 'active') { clearInterval(STATE.draftTimer); return; } const newSecs = Math.max(0, STATE.league.draftState.secs - 1); STATE.league = { ...STATE.league, draftState: { ...STATE.league.draftState, secs: newSecs } }; updateClockUI(); if (newSecs <= 0) { clearInterval(STATE.draftTimer); autoPick(); } }, 1000); }
     function updateClockUI() {
       const ds = STATE.league?.draftState;
@@ -2960,7 +2960,7 @@
       saveState();
       R();
     }
-    function simDraft() { const l = STATE.league; let league = { ...l, status: 'draft', draftState: { status: 'active', idx: 0, order: l.draftOrder?.length === l.teams.length ? l.draftOrder : l.teams.map(t => t.id), picks: [], total: l.teams.length * l.ppt, secs: l.timerSecs, queue: [] } }; const total = league.teams.length * league.ppt; const avail = [...league.players.filter(p => !p.teamId && !(p.isCaptain || league.teams.some(t => t.captainId === p.id)))]; for (let i = 0; i < total && avail.length > 0; i++) { const n = league.teams.length; const rnd = Math.floor(league.draftState.idx / n); const pos = league.draftState.idx % n; const ord = rnd % 2 === 0 ? league.draftState.order : [...league.draftState.order].reverse(); const tid = ord[pos]; const player = avail.shift(); league = { ...league, players: league.players.map(p => p.id === player.id ? { ...p, teamId: tid } : p), draftState: { ...league.draftState, picks: [...league.draftState.picks, { num: league.draftState.idx + 1, tid, pn: player.name }], idx: league.draftState.idx + 1, secs: l.timerSecs } }; } league.draftState.status = 'done'; league.status = 'season'; league.seasonEntered = false; STATE.league = league; STATE.appTab = 'draft'; R(); }
+    function simDraft() { const l = STATE.league; const simCaptainCount = l.teams.filter(t => t.captainId).length; let league = { ...l, status: 'draft', draftState: { status: 'active', idx: 0, order: l.draftOrder?.length === l.teams.length ? l.draftOrder : l.teams.map(t => t.id), picks: [], total: l.teams.length * l.ppt - simCaptainCount, secs: l.timerSecs, queue: [] } }; const total = league.teams.length * league.ppt - simCaptainCount;const avail = [...league.players.filter(p => !p.teamId && !(p.isCaptain || league.teams.some(t => t.captainId === p.id)))]; for (let i = 0; i < total && avail.length > 0; i++) { const n = league.teams.length; const rnd = Math.floor(league.draftState.idx / n); const pos = league.draftState.idx % n; const ord = rnd % 2 === 0 ? league.draftState.order : [...league.draftState.order].reverse(); const tid = ord[pos]; const player = avail.shift(); league = { ...league, players: league.players.map(p => p.id === player.id ? { ...p, teamId: tid } : p), draftState: { ...league.draftState, picks: [...league.draftState.picks, { num: league.draftState.idx + 1, tid, pn: player.name }], idx: league.draftState.idx + 1, secs: l.timerSecs } }; } league.draftState.status = 'done'; league.status = 'season'; league.seasonEntered = false; STATE.league = league; STATE.appTab = 'draft'; R(); }
     function confirmSimDraft() { openModal('Sim Draft?', `<div style='font-size:13px;color:var(--t2);line-height:1.6'>Are you sure you want to sim draft? This will finish the entire draft instantly.</div>`, `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Cancel</button><button class='btn btn-p btn-sm' onclick='closeModal();simDraft()'>Yes - Sim Draft</button>`); }
     function confirmReset() {
       openModal(
@@ -3051,7 +3051,7 @@
       }, 3200);
     }
     function beginSeasonTransition() { if (!STATE.league) return; clearTimeout(STATE.transitionTimeout); ensureLockedGameOfDay(STATE.league, STATE.league.currentDayGameNum || 1); STATE.league = { ...STATE.league, transitionMode: 'season', status: 'season', seasonEntered: true }; STATE.appTab = 'home'; R(); }
-    function startDraftNow() { const l = STATE.league; const order = l.draftOrder?.length === l.teams.length ? l.draftOrder : l.teams.map(t => t.id); STATE.league = { ...l, status: 'draft', draftState: { status: 'active', idx: 0, order, picks: [], total: l.teams.length * l.ppt, secs: l.timerSecs, queue: [] } }; STATE.appTab = 'draft'; R(); startTimer(); }
+    function startDraftNow() { const l = STATE.league; const order = l.draftOrder?.length === l.teams.length ? l.draftOrder : l.teams.map(t => t.id); const captainCount = l.teams.filter(t => t.captainId).length; STATE.league = { ...l, status: 'draft', draftState: { status: 'active', idx: 0, order, picks: [], total: l.teams.length * l.ppt - captainCount, secs: l.timerSecs, queue: [] } }; STATE.appTab = 'draft'; R(); startTimer(); }
     function wizNext() { const l = STATE.league; if (STATE.wizStep === 0 && !l.name?.trim()) { alert('Please enter a league name'); return; } STATE.wizStep++; R(); }
     function prevWiz() { STATE.wizStep--; R(); }
 
@@ -4463,10 +4463,15 @@
 
         // Action buttons
         let actions = '';
-        if (isUpcoming) {
+        const isComm = STATE.memberRole === 'commissioner';
+        const myTeamId = STATE.memberTeamId || l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); })?.id;
+        const isMyGame = g.home === myTeamId || g.away === myTeamId;
+        if (!isComm && !isMyGame) {
+          actions = '';
+        } else if (isUpcoming) {
           actions = `<div style='display:flex;gap:6px;padding:10px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
-            <button class='btn btn-o btn-xs' style='color:#f59e0b;border-color:#f59e0b' onclick='postponeGame("${g.id}")'>Postpone</button>
-            <button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='openForfeitModal("${g.id}")'>Forfeit</button>
+            ${isComm ? `<button class='btn btn-o btn-xs' style='color:#f59e0b;border-color:#f59e0b' onclick='postponeGame("${g.id}")'>Postpone</button>
+            <button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='openForfeitModal("${g.id}")'>Forfeit</button>` : ''}
             <button onclick='startGame("${g.id}")' style='padding:6px 16px;border-radius:8px;background:#16a34a;color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer'>▶ Start Game</button>
           </div>`;
         } else if (isLive) {
@@ -4475,11 +4480,11 @@
             <button onclick='endGame("${g.id}")' style='padding:6px 16px;border-radius:8px;background:#111;color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer'>■ End Game</button>
           </div>`;
         } else if (isFinal) {
-          actions = `<div style='display:flex;gap:6px;padding:8px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
+          actions = `<div style='display:flex;gap:6px;padding:10px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
             <button class='btn btn-o btn-xs' onclick='scoreGame("${g.id}")'>✏️ Edit Score</button>
           </div>`;
-        } else if (isPostponed) {
-          actions = `<div style='display:flex;gap:6px;padding:8px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
+        } else if (isPostponed && isComm) {
+          actions = `<div style='display:flex;gap:6px;padding:10px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
             <button class='btn btn-o btn-xs' onclick='reinstateGame("${g.id}")'>Reinstate</button>
             <button class='btn btn-o btn-xs' style='color:#f59e0b;border-color:#f59e0b' onclick='postponeGame("${g.id}")'>Reschedule</button>
           </div>`;
@@ -4853,13 +4858,15 @@
         <div class='draft-focus' style='background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.01));border-top:1px solid rgba(255,255,255,.07);padding:14px 16px'>
           ${currentTeam ? `
             <div style='display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap'>
-              <div class='draft-hero-controls'>
-                ${ds.status === 'active' ? `<button class='btn btn-o btn-sm' onclick='pauseDraft()'>⏸ Pause</button>` : ds.status === 'paused' ? `<button class='btn btn-p btn-sm' onclick='resumeDraft()'>▶ Resume</button>` : ''}
-                ${ds.status !== 'done' ? `<button class='btn btn-o btn-sm' onclick='autoPick()'>Auto Pick</button>` : `<button class='btn btn-p btn-sm' onclick='beginSeasonTransition()'>Enter League</button>`}
-                ${ds.status !== 'done' && STATE.lastPickSnapshot ? `<button class='btn btn-o btn-sm' style='border-color:var(--amber);color:#b45309' onclick='undoLastPick()'>↩ Undo Pick</button>` : ''}
-                ${ds.status !== 'done' ? `<button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Sim Draft</button>` : ''}
+             <div class='draft-hero-controls'>
+                ${!isCapt ? `
+                  ${ds.status === 'active' ? `<button class='btn btn-o btn-sm' onclick='pauseDraft()'>⏸ Pause</button>` : ds.status === 'paused' ? `<button class='btn btn-p btn-sm' onclick='resumeDraft()'>▶ Resume</button>` : ''}
+                  ${ds.status !== 'done' ? `<button class='btn btn-o btn-sm' onclick='autoPick()'>Auto Pick</button>` : `<button class='btn btn-p btn-sm' onclick='beginSeasonTransition()'>Enter League</button>`}
+                  ${ds.status !== 'done' && STATE.lastPickSnapshot ? `<button class='btn btn-o btn-sm' style='border-color:var(--amber);color:#b45309' onclick='undoLastPick()'>↩ Undo Pick</button>` : ''}
+                  ${ds.status !== 'done' ? `<button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Sim Draft</button>` : ''}
+                  <button class='btn btn-o btn-sm' onclick="STATE.appTab='commissioner';STATE.commOpen={...STATE.commOpen||{},draft:true};R()">Commissioner</button>
+                ` : ''}
                 ${ds.status === 'done' ? `<button class='btn btn-o btn-sm' onclick="STATE.draftRecap=true;R()">📋 Draft Recap</button>` : ''}
-                <button class='btn btn-o btn-sm' onclick="STATE.appTab='commissioner';STATE.commOpen={...STATE.commOpen||{},draft:true};R()">Commissioner</button>
               </div>
               <div style='display:flex;gap:10px;flex-wrap:wrap'>
                 <div class='stat-chip' style='background:#111827;border:1px solid #243041;border-radius:14px;padding:9px 12px;min-width:92px'><div class='stat-chip-v' style='font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:900;color:#f9fafb'>${currentRound}</div><div class='stat-chip-l' style='font-size:10px;color:#94a3b8;text-transform:uppercase;font-weight:700;letter-spacing:.7px'>Round</div></div>
