@@ -4861,11 +4861,12 @@
              <div class='draft-hero-controls'>
                 ${!isCapt ? `
                   ${ds.status === 'active' ? `<button class='btn btn-o btn-sm' onclick='pauseDraft()'>⏸ Pause</button>` : ds.status === 'paused' ? `<button class='btn btn-p btn-sm' onclick='resumeDraft()'>▶ Resume</button>` : ''}
-                  ${ds.status !== 'done' ? `<button class='btn btn-o btn-sm' onclick='autoPick()'>Auto Pick</button>` : `<button class='btn btn-p btn-sm' onclick='beginSeasonTransition()'>Enter League</button>`}
+                  ${ds.status !== 'done' ? `<button class='btn btn-o btn-sm' onclick='autoPick()'>Auto Pick</button>` : ''}
                   ${ds.status !== 'done' && STATE.lastPickSnapshot ? `<button class='btn btn-o btn-sm' style='border-color:var(--amber);color:#b45309' onclick='undoLastPick()'>↩ Undo Pick</button>` : ''}
                   ${ds.status !== 'done' ? `<button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Sim Draft</button>` : ''}
                   <button class='btn btn-o btn-sm' onclick="STATE.appTab='commissioner';STATE.commOpen={...STATE.commOpen||{},draft:true};R()">Commissioner</button>
                 ` : ''}
+                ${ds.status === 'done' ? `<button class='btn btn-p btn-sm' onclick='beginSeasonTransition()'>Enter League</button>` : ''}
                 ${ds.status === 'done' ? `<button class='btn btn-o btn-sm' onclick="STATE.draftRecap=true;R()">📋 Draft Recap</button>` : ''}
               </div>
               <div style='display:flex;gap:10px;flex-wrap:wrap'>
