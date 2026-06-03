@@ -5467,7 +5467,7 @@ async function assignCaptain(playerId, teamId) {
       if (!player || !team) return;
       await sb.from('league_members').update({ role: 'captain', team_id: teamId })
         .eq('league_id', l.id).eq('user_id', player.userId || player.id);
-      l.teams = l.teams.map(t => t.id === teamId ? { ...t, captainId: playerId, captainName: player.name } : t);
+      l.teams = l.teams.map(t => t.id === teamId ? { ...t, captainId: playerId, captainName: player.name, cap: player.name } : t);
       l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: true, captainTeamId: teamId } : p);
       await saveState();
       closeModal();
@@ -5480,7 +5480,7 @@ async function assignCaptain(playerId, teamId) {
       if (!player) return;
       await sb.from('league_members').update({ role: 'player', team_id: null })
         .eq('league_id', l.id).eq('user_id', player.userId || player.id);
-      l.teams = l.teams.map(t => t.captainId === playerId ? { ...t, captainId: null, captainName: null } : t);
+      l.teams = l.teams.map(t => t.captainId === playerId ? { ...t, captainId: null, captainName: null, cap: '' } : t);
       l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: false, captainTeamId: null, teamId: null } : p);
       await saveState();
       R();
