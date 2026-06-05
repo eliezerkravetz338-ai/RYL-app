@@ -3281,6 +3281,28 @@
       </div>`;
     }
 
+   function renderPlayerNav() {
+      const l = STATE.league;
+      const myPlayer = l.players.find(p => p.userId === STATE.user?.id || p.id === STATE.user?.id);
+      const myTeam = myPlayer?.teamId ? l.teams.find(t => t.id === myPlayer.teamId) : null;
+      const tabs = [
+        { k: 'home', lb: 'Home' },
+        { k: 'standings', lb: 'Standings' },
+        { k: 'schedule', lb: 'Schedule' },
+        { k: 'rosters', lb: 'Rosters' },
+      ];
+      return `<div class='nav' style='position:sticky;top:0;z-index:20'>
+        <div style='display:flex;align-items:center;gap:8px;flex:1;min-width:0'>
+          ${myTeam ? `<div style='width:28px;height:28px;border-radius:50%;background:${myTeam.color||"#16a34a"};flex-shrink:0'></div>
+          <span style='font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px'>${myTeam.name||'My Team'}</span>` : `<span class='logo-mark'>RYL</span>`}
+        </div>
+        <div class='nav-tabs'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''}' onclick="STATE.appTab='${t.k}';R()">${t.lb}</button>`).join('')}</div>
+        <div class='nav-right' style='display:flex;align-items:center;gap:6px'>
+          ${STATE.leagues.length > 1 ? `<button onclick="STATE.showLeagueSwitcher=!STATE.showLeagueSwitcher;R()" style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer'>Leagues ${STATE.showLeagueSwitcher?'▲':'▼'}</button>` : ''}
+          <button onclick='confirmSignOut()' style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer'>Sign Out</button>
+        </div>
+      </div>`;
+    }
     async function saveCaptainTeamName() {
       const val = document.getElementById('captain-team-name')?.value?.trim();
       if (!val) return;
@@ -4323,6 +4345,7 @@
     function renderStandings() {
       const l = STATE.league;
       const rows = getStandingsRows(l);
+      const myTeamId = STATE.memberTeamId || l.players.find(p => p.userId === STATE.user?.id || p.id === STATE.user?.id)?.teamId;
       const streakBadge = (tid) => {
         const s = getStreak(tid, l.games);
         if (s.count >= 3 && s.type === 'W') return `<span style='font-size:14px;margin-left:3px'>🔥</span>`;
@@ -4365,18 +4388,20 @@
             const streak = getStreak(r.team.id, l.games);
             const hot  = streak.count >= 3 && streak.type === 'W';
             const cold = streak.count >= 3 && streak.type === 'L';
-            const bg = isTop ? 'linear-gradient(90deg,rgba(250,204,21,.07),rgba(250,204,21,.02))'
+            const isMyTeam = r.team.id === myTeamId;
+            const bg = isMyTeam ? 'linear-gradient(90deg,rgba(22,163,74,.1),rgba(22,163,74,.03))'
+                     : isTop ? 'linear-gradient(90deg,rgba(250,204,21,.07),rgba(250,204,21,.02))'
                      : hot   ? 'linear-gradient(90deg,rgba(22,163,74,.05),transparent)'
                      : cold  ? 'linear-gradient(90deg,rgba(59,130,246,.05),transparent)' : '#fff';
-            return `<div style='display:grid;grid-template-columns:32px 1fr 44px 44px 44px 44px 60px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--b1);background:${bg}'>
+            return `<div style='display:grid;grid-template-columns:32px 1fr 44px 44px 44px 44px 60px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--b1);background:${bg};${isMyTeam?'border-left:3px solid var(--g);':''}'>
               <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:16px;color:${isTop ? '#b45309' : 'var(--t3)'}'>
                 ${isTop ? '👑' : i + 1}
               </div>
               <div style='display:flex;align-items:center;gap:8px'>
                 ${teamAvatar(r.team, 'tm-av')}
                 <div>
-                  <div style='font-size:13px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:2px'>
-                    ${r.team.name}${streakBadge(r.team.id)}
+                 <div style='font-size:13px;font-weight:700;color:${isMyTeam?'var(--gd)':'var(--t1)'};display:flex;align-items:center;gap:4px'>
+                    ${r.team.name}${streakBadge(r.team.id)}${isMyTeam?`<span style='font-size:9px;font-weight:800;background:var(--gm);color:var(--gd);border:1px solid rgba(22,163,74,.3);border-radius:4px;padding:1px 5px'>You</span>`:''}
                   </div>
                   ${r.team.cap ? `<div style='font-size:10px;color:var(--t3)'>Cap: ${r.team.cap}</div>` : ''}
                 </div>
@@ -4395,8 +4420,9 @@
     function renderSchedule() {
       const l = STATE.league;
       if (l.status === 'playoffs' || l.status === 'complete') return renderPlayoffSchedule();
-      if (!STATE.schedGame) STATE.schedGame = l.currentDayGameNum || 1;
+    if (!STATE.schedGame) STATE.schedGame = l.currentDayGameNum || 1;
       const currentDay = l.currentDayGameNum || 1;
+      const myTeamId = STATE.memberTeamId || l.players.find(p => p.userId === STATE.user?.id || p.id === STATE.user?.id)?.teamId;
       const maxDay = l.gameDays?.length || 1;
       const selDay = STATE.schedGame;
       const games = l.games.filter(g => g.gameNum === selDay);
@@ -4490,11 +4516,12 @@
           </div>`;
         }
 
-        return `<div style='background:#fff;border:1px solid ${isLive?"#fca5a5":"#e2e8f0"};border-radius:12px;overflow:hidden;box-shadow:${isLive?"0 0 0 2px rgba(239,68,68,.15),0 1px 4px rgba(0,0,0,.06)":"0 1px 4px rgba(0,0,0,.06)"}'>
+       const isMyGame = !!(myTeamId && (g.home === myTeamId || g.away === myTeamId));
+        return `<div style='background:#fff;border:1px solid ${isLive?"#fca5a5":isMyGame?"rgba(22,163,74,.4)":"#e2e8f0"};border-radius:12px;overflow:hidden;box-shadow:${isLive?"0 0 0 2px rgba(239,68,68,.15),0 1px 4px rgba(0,0,0,.06)":isMyGame?"0 0 0 2px rgba(22,163,74,.1),0 1px 4px rgba(0,0,0,.06)":"0 1px 4px rgba(0,0,0,.06)"}'>
           <!-- Status bar -->
-          <div style='display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:${isLive?"#fff7f7":"#fafafa"};border-bottom:1px solid ${isLive?"#fecaca":"#f1f5f9"}'>
+          <div style='display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:${isLive?"#fff7f7":isMyGame?"rgba(22,163,74,.04)":"#fafafa"};border-bottom:1px solid ${isLive?"#fecaca":isMyGame?"rgba(22,163,74,.15)":"#f1f5f9"}'>
             ${statusLabel}
-            <span style='font-size:11px;color:#94a3b8'>${g.court||''}</span>
+            <span style='font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:6px'>${isMyGame?`<span style='font-size:9px;font-weight:800;background:var(--gm);color:var(--gd);border:1px solid rgba(22,163,74,.3);border-radius:4px;padding:1px 5px'>Your Game</span>`:''} ${g.court||''}</span>
           </div>
           ${teamRow(home, homeId, homeWon, awayWon, g.hs, 'hs', g.as)}
           ${teamRow(away, awayId, awayWon, homeWon, g.as, 'as', g.hs)}
@@ -4532,8 +4559,9 @@
     }
 
 
-    function renderRosters() {
+   function renderRosters() {
       const l = STATE.league;
+      const myTeamId = STATE.memberTeamId || l.players.find(p => p.userId === STATE.user?.id || p.id === STATE.user?.id)?.teamId;
 
       // ── Team detail page ──────────────────────────────────────────
       if (STATE.rosterFocus) {
@@ -4628,12 +4656,13 @@
             const streak = getStreak(t.id, l.games);
             const streakIcon = streak.count >= 3 && streak.type === 'W' ? '🔥' : streak.count >= 3 && streak.type === 'L' ? '❄️' : '';
             const identity = smartTeamIdentity(t);
-            return `<div class='rc' onclick='STATE.rosterFocus="${t.id}";R()' style='cursor:pointer'>
+            const isMyTeam = t.id === myTeamId;
+            return `<div class='rc' onclick='STATE.rosterFocus="${t.id}";R()' style='cursor:pointer;${isMyTeam?"border-color:rgba(22,163,74,.5);box-shadow:0 0 0 2px rgba(22,163,74,.12),0 4px 14px rgba(0,0,0,.05);":""}'>
               <div style='height:6px;background:${t.color};opacity:.85'></div>
               <div class='rc-top'>
                 <div style='width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:14px;color:#fff;background:${identity.gradient};flex-shrink:0'>${identity.mark}</div>
                 <div style='flex:1;min-width:0'>
-                  <div class='rc-nm' style='display:flex;align-items:center;gap:3px'>${t.name}${streakIcon ? `<span style='font-size:14px'>${streakIcon}</span>` : ''}</div>
+                <div class='rc-nm' style='display:flex;align-items:center;gap:4px'>${t.name}${streakIcon ? `<span style='font-size:14px'>${streakIcon}</span>` : ''}${isMyTeam?`<span style='font-size:9px;font-weight:800;background:var(--gm);color:var(--gd);border:1px solid rgba(22,163,74,.3);border-radius:4px;padding:1px 5px'>You</span>`:''}</div>
                   ${t.cap ? `<div class='rc-cap'>Cap: ${t.cap}</div>` : ''}
                   <div class='rc-rec'>${rec.w}–${rec.l}</div>
                 </div>
@@ -7080,6 +7109,13 @@ async function assignCaptain(playerId, teamId) {
             if (STATE.draftPreviewMode || STATE.appTab === 'draft') return renderDraft();
             return renderWaiting();
           }
+          const playerNav = renderPlayerNav();
+          const playerModal = STATE.modal ? renderModal() : '';
+          if (STATE.appTab === 'standings') return playerNav + renderStandings() + playerModal;
+          if (STATE.appTab === 'schedule') return playerNav + renderSchedule() + playerModal;
+          if (STATE.appTab === 'rosters') return playerNav + renderRosters() + playerModal;
+          return playerNav + renderHome() + playerModal;
+        }
           // After draft — fall through to normal tabs
         }
       } if (STATE.screen === 'landing') return renderLanding(); if (STATE.screen === 'wizard') return renderWizard(); if (STATE.screen === 'join') return renderJoin(); if (STATE.screen === 'app') return renderMainApp(); return renderLanding(); }
