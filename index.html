@@ -7209,8 +7209,6 @@ async function assignCaptain(playerId, teamId) {
           if (STATE.appTab === 'rosters') return playerNav + renderRosters() + playerModal;
           return playerNav + renderMemberSeasonHome() + playerModal;
         }
-          // After draft — fall through to normal tabs
-        }
       } if (STATE.screen === 'landing') return renderLanding(); if (STATE.screen === 'wizard') return renderWizard(); if (STATE.screen === 'join') return renderJoin(); if (STATE.screen === 'app') return renderMainApp(); return renderLanding(); }
     document.addEventListener('click', (e) => {
       if (STATE.showLeagueSwitcher && !e.target.closest('.league-switcher-root')) {
