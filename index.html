@@ -4126,6 +4126,99 @@
   </div>
 </div><div class='lobby-grid'><div class='card'><div class='chd'><h3>${live ? 'Live Now' : draftFinished ? 'Season Opens Next' : 'Next Game'}</h3><button class='btn btn-o btn-xs' onclick="STATE.appTab='schedule';R()">View Schedule</button></div><div class='cbd'>${live ? `<div style='font-size:12px;color:var(--red);margin-bottom:6px;font-weight:800;text-transform:uppercase;letter-spacing:.5px'>Live • Game #${live.gameNum} • ${live.court}</div><div style='display:flex;align-items:center;justify-content:space-between;padding:8px 0'><div style='display:flex;align-items:center;gap:7px'><div class='gc-dot' style='background:${liveH.color}'></div><strong>${liveH.name}</strong></div><strong style='font-family:"Barlow Condensed",sans-serif;font-size:28px'>${live.hs ?? 0}</strong></div><div style='display:flex;align-items:center;justify-content:space-between;padding:8px 0'><div style='display:flex;align-items:center;gap:7px'><div class='gc-dot' style='background:${liveA.color}'></div><strong>${liveA.name}</strong></div><strong style='font-family:"Barlow Condensed",sans-serif;font-size:28px'>${live.as ?? 0}</strong></div><div style='margin-top:12px'><button class='btn btn-o btn-sm' onclick="STATE.appTab='commissioner';STATE.commOpen={...STATE.commOpen||{},schedule:true};R()">Open Game Controls</button></div>` : next ? `<div style='font-size:12px;color:var(--t3);margin-bottom:6px'>Game #${next.gameNum} • ${next.time} • ${next.court}</div><div style='display:flex;align-items:center;justify-content:space-between;padding:8px 0'><div style='display:flex;align-items:center;gap:7px'><div class='gc-dot' style='background:${h.color}'></div><strong>${h.name}</strong></div><span>vs</span><div style='display:flex;align-items:center;gap:7px'><div class='gc-dot' style='background:${a.color}'></div><strong>${a.name}</strong></div></div>${draftFinished ? `<div style='margin-top:12px'><button class='btn btn-p btn-sm' onclick='beginSeasonTransition()'>Enter League</button></div>` : ''}` : `<div class='empty-s'><h3>No games yet</h3><p>Generate the schedule from Commissioner.</p></div>`}</div></div><div class='card'><div class='chd'><h3>Draft Status</h3>${l.draftState ? `<span class='badge ${draftFinished ? 'bg-green' : 'bg-gray'}'>${draftFinished ? 'Complete' : l.draftState.status === 'paused' ? 'Paused' : 'Live'}</span>` : ''}</div><div class='cbd'>${l.draftState ? `<div class='res-row'><span>Total Picks</span><strong>${l.draftState.picks.length}/${l.draftState.total}</strong></div><div class='res-row'><span>Last Pick</span><strong>${l.draftState.picks.at(-1)?.pn || 'None'}</strong></div><div class='res-row'><span>Current Team</span><strong>${l.draftState.status === 'active' || l.draftState.status === 'paused' ? (l.teams.find(t => t.id === getPickTeam(l.draftState, l.teams))?.name || '—') : 'Draft finished'}</strong></div><div style='margin-top:10px;display:flex;gap:8px;flex-wrap:wrap'><button class='btn btn-p btn-sm' onclick="STATE.appTab='draft';R()">${draftFinished ? 'Go to Draft Board' : 'Open Draft Room'}</button>${draftFinished ? `<button class='btn btn-o btn-sm' onclick='beginSeasonTransition()'>Enter League</button>` : ''}</div>` : `<div class='empty-s'><h3>Draft not started</h3><p>Start the draft from Commissioner.</p></div>`}</div></div><div class='card'><div class='chd'><h3>Quick Actions</h3></div><div class='cbd'><div style='display:flex;flex-direction:column;gap:8px'>${!l.draftState ? `<button class='btn btn-p btn-sm' onclick='beginDraftTransition()'>Start Draft</button><button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Simulate Full Draft</button>` : draftFinished ? `<button class='btn btn-p btn-sm' onclick='beginSeasonTransition()'>Enter League</button><button class='btn btn-o btn-sm' onclick="STATE.appTab='draft';R()">Review Draft Board</button>` : `<button class='btn btn-p btn-sm' onclick="STATE.appTab='draft';R()">Open Draft Room</button>`}<button class='btn btn-o btn-sm' onclick="STATE.appTab='commissioner';R()">Open Commissioner</button></div></div></div></div>`; }
 
+    function renderMemberSeasonHome() {
+      const l = STATE.league;
+      const myTeamId = STATE.memberTeamId || l.players.find(p => p.userId === STATE.user?.id || p.id === STATE.user?.id)?.teamId;
+      const myTeam = myTeamId ? l.teams.find(t => t.id === myTeamId) : null;
+      const myRecord = myTeamId ? calcRec(myTeamId, l.games) : { w:0, l:0, pf:0, pa:0 };
+      const standings = getStandingsRows(l);
+      const myStanding = myTeamId ? standings.findIndex(r => r.team.id === myTeamId) + 1 : 0;
+      const myStreak = myTeamId ? getStreak(myTeamId, l.games) : { type: null, count: 0 };
+      const currentDay = l.currentDayGameNum || 1;
+      const todayGames = l.games.filter(g => g.gameNum === currentDay);
+      const liveGame = getLiveGame(l, currentDay);
+      const nextGame = getNextScheduledGame(l, currentDay);
+      const allFinal = todayGames.length > 0 && todayGames.every(g => g.status === 'final');
+
+      // Game of the Day
+      ensureLockedGameOfDay(l, currentDay);
+      const godId = (l.gameOfDayByDay || {})[currentDay];
+      const god = l.games.find(g => g.id === godId);
+
+      // My next game
+      const myTodayGame =
+        todayGames.find(g => (g.home === myTeamId || g.away === myTeamId) && g.status === 'live') ||
+        todayGames.find(g => (g.home === myTeamId || g.away === myTeamId) && (g.status === 'upcoming' || g.status === 'delayed')) ||
+        todayGames.find(g => g.home === myTeamId || g.away === myTeamId);
+      const myNextGame = myTodayGame || l.games.find(g => (g.home === myTeamId || g.away === myTeamId) && (g.status === 'upcoming' || g.status === 'delayed'));
+      const isGOTD = !!(god && myNextGame && god.id === myNextGame.id);
+      const oppId = myNextGame ? (myNextGame.home === myTeamId ? myNextGame.away : myNextGame.home) : null;
+      const oppTeam = oppId ? l.teams.find(t => t.id === oppId) : null;
+      const oppRecord = oppId ? calcRec(oppId, l.games) : null;
+
+      // ── 1. Game of the Day hero ──
+      const heroHtml = renderSeasonHomeHero(l, currentDay, liveGame, nextGame, allFinal);
+
+      // ── 2. Your Next Game card ──
+      let myGameHtml = '';
+      if (isGOTD) {
+        myGameHtml = `<div style='margin:10px 18px 0;background:rgba(22,163,74,.08);border:1.5px solid rgba(22,163,74,.3);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:8px'>
+          <span style='font-size:20px'>⭐</span>
+          <span style='font-size:13px;font-weight:700;color:var(--gd)'>Your game is the Game of the Day!</span>
+        </div>`;
+      } else if (myNextGame && oppTeam) {
+        const isHome = myNextGame.home === myTeamId;
+        const isLive = myNextGame.status === 'live';
+        const isFinal = myNextGame.status === 'final';
+        const myScore = isHome ? (myNextGame.hs ?? 0) : (myNextGame.as ?? 0);
+        const oppScore = isHome ? (myNextGame.as ?? 0) : (myNextGame.hs ?? 0);
+        const won = isFinal && myScore > oppScore;
+        const lost = isFinal && myScore < oppScore;
+        const scoreColor = won ? 'var(--gd)' : lost ? 'var(--red)' : 'var(--t1)';
+        const gameLabel = isLive ? '🔴 In Progress' : isFinal ? 'Final' : (myNextGame.time || 'Upcoming') + (myNextGame.court ? ' · ' + myNextGame.court : '');
+        myGameHtml = `<div style='margin:10px 18px 0;background:linear-gradient(135deg,${myTeam?.color||'#16a34a'}18,transparent);border:1.5px solid ${myTeam?.color||'var(--g)'}44;border-radius:var(--rx);padding:16px 20px'>
+          <div style='font-size:10px;font-weight:800;color:var(--gd);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px'>⚡ Your ${isFinal ? 'Last' : 'Next'} Game · Day ${myNextGame.gameNum}</div>
+          <div style='display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap'>
+            <div style='flex:1;min-width:0'>
+              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:var(--t1);line-height:1'>${myTeam?.name || 'Your Team'} <span style='color:var(--t3);font-size:18px'>vs</span> ${oppTeam.name}</div>
+              <div style='font-size:12px;color:var(--t3);margin-top:5px'>${gameLabel}</div>
+              ${oppRecord ? `<div style='font-size:11px;color:var(--t3);margin-top:2px'>Opponent: ${oppRecord.w}–${oppRecord.l}</div>` : ''}
+            </div>
+            ${isLive || isFinal ? `<div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:42px;color:${scoreColor};line-height:1;flex-shrink:0'>${myScore}–${oppScore}</div>` : ''}
+          </div>
+        </div>`;
+      } else {
+        myGameHtml = `<div style='margin:10px 18px 0;background:var(--f4);border:1px solid var(--b1);border-radius:12px;padding:12px 16px;font-size:13px;color:var(--t3)'>No upcoming games scheduled.</div>`;
+      }
+
+      // ── 3. Team record chips ──
+      const chipsHtml = myTeam ? `<div style='display:flex;gap:10px;padding:12px 18px 0;overflow-x:auto;-webkit-overflow-scrolling:touch'>
+        <div style='background:var(--n1);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px 16px;min-width:100px;flex-shrink:0'>
+          <div style='font-size:10px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.8px'>Record</div>
+          <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:26px;color:#fff;line-height:1.1'>${myRecord.w}–${myRecord.l}</div>
+        </div>
+        <div style='background:var(--n1);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px 16px;min-width:110px;flex-shrink:0'>
+          <div style='font-size:10px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.8px'>Standing</div>
+          <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:26px;color:#fff;line-height:1.1'>${myStanding > 0 ? '#' + myStanding : '—'} <span style='font-size:13px;color:rgba(255,255,255,.35)'>of ${l.teams.length}</span></div>
+        </div>
+        ${myStreak.type ? `<div style='background:var(--n1);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px 16px;min-width:100px;flex-shrink:0'>
+          <div style='font-size:10px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.8px'>Streak</div>
+          <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:26px;color:${myStreak.type === 'W' ? '#4ade80' : '#60a5fa'};line-height:1.1'>${myStreak.type}${myStreak.count}</div>
+        </div>` : ''}
+        <div style='background:var(--n1);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px 16px;min-width:100px;flex-shrink:0'>
+          <div style='font-size:10px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.8px'>Pts For</div>
+          <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:26px;color:#fff;line-height:1.1'>${myRecord.pf}</div>
+        </div>
+      </div>` : '';
+
+      // ── 4 & 5. Today's games + Activity ──
+      const twoColHtml = `<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px 0'>
+        ${renderSeasonHomeGames(l, todayGames, currentDay)}
+        ${renderSeasonHomeActivity(l)}
+      </div><div style='height:18px'></div>`;
+
+      return heroHtml + myGameHtml + chipsHtml + twoColHtml;
+    }
     function renderSeasonHome() {
       const l = STATE.league;
       const currentDay = l.currentDayGameNum || 1;
@@ -7097,11 +7190,13 @@ async function assignCaptain(playerId, teamId) {
         if (STATE.justJoined) return renderJoinSuccess();
         if (STATE.memberRole === 'captain') {
           if (STATE.appTab === 'draft' || STATE.draftPreviewMode) return renderCaptainNav() + renderDraft();
-          if (STATE.appTab === 'home' || !STATE.appTab) return renderCaptainNav() + renderCaptainHome();
-          if (STATE.appTab === 'standings') return renderCaptainNav() + renderStandings();
-          if (STATE.appTab === 'schedule') return renderCaptainNav() + renderSchedule();
-          if (STATE.appTab === 'rosters') return renderCaptainNav() + renderRosters();
-          return renderCaptainNav() + renderCaptainHome();
+          const captainModal = STATE.modal ? renderModal() : '';
+          const captainDraftDone = STATE.league.draftState?.status === 'done' || STATE.league.status === 'season' || STATE.league.status === 'playoffs' || STATE.league.status === 'complete';
+          if (STATE.appTab === 'home' || !STATE.appTab) return renderCaptainNav() + (captainDraftDone ? renderMemberSeasonHome() : renderCaptainHome()) + captainModal;
+          if (STATE.appTab === 'standings') return renderCaptainNav() + renderStandings() + captainModal;
+          if (STATE.appTab === 'schedule') return renderCaptainNav() + renderSchedule() + captainModal;
+          if (STATE.appTab === 'rosters') return renderCaptainNav() + renderRosters() + captainModal;
+          return renderCaptainNav() + (captainDraftDone ? renderMemberSeasonHome() : renderCaptainHome()) + captainModal;
         }
         if (STATE.memberRole === 'player') {
           const draftDone = STATE.league.draftState?.status === 'done' || STATE.league.status === 'season' || STATE.league.status === 'playoffs' || STATE.league.status === 'complete';
@@ -7114,7 +7209,7 @@ async function assignCaptain(playerId, teamId) {
           if (STATE.appTab === 'standings') return playerNav + renderStandings() + playerModal;
           if (STATE.appTab === 'schedule') return playerNav + renderSchedule() + playerModal;
           if (STATE.appTab === 'rosters') return playerNav + renderRosters() + playerModal;
-          return playerNav + renderHome() + playerModal;
+          return playerNav + renderMemberSeasonHome() + playerModal;
         }
           // After draft — fall through to normal tabs
         }
