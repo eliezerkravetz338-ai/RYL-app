@@ -4583,8 +4583,6 @@
         // Action buttons
         let actions = '';
         const isComm = STATE.memberRole === 'commissioner';
-        const myTeamId = STATE.memberTeamId || l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); })?.id;
-        const isMyGame = g.home === myTeamId || g.away === myTeamId;
         if (!isComm && !isMyGame) {
           actions = '';
         } else if (isUpcoming) {
