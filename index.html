@@ -2969,7 +2969,7 @@
       );
     }
     function reopenDraft() { const l = STATE.league; STATE.league = { ...l, status: 'lobby', draftState: null, players: l.players.map(p => ({ ...p, teamId: null })) }; STATE.appTab = 'home'; clearInterval(STATE.draftTimer); R(); }
-    function beginDraftTransition() { clearTimeout(STATE.transitionTimeout); STATE.league.status = 'transition'; STATE.league.transitionMode = 'draft'; _saving = false; R(); STATE.transitionTimeout = setTimeout(() => { startDraftNow(); }, 1800); }
+    function beginDraftTransition() { clearTimeout(STATE.transitionTimeout); STATE.league.status = 'transition'; STATE.league.transitionMode = 'draft'; document.getElementById('app').innerHTML = renderApp(); STATE.transitionTimeout = setTimeout(() => { startDraftNow(); }, 1800); }
     function skipPlayoffsEndSeason() {
       const l = STATE.league;
       const standings = getStandingsRows(l);
@@ -7188,6 +7188,7 @@ async function assignCaptain(playerId, teamId) {
       if (STATE.screen === 'app' && STATE.league) {
         if (STATE.justJoined) return renderJoinSuccess();
         if (STATE.memberRole === 'captain') {
+          if (STATE.league.status === 'draft' && STATE.league.draftState?.status === 'active' && (STATE.appTab === 'home' || !STATE.appTab)) STATE.appTab = 'draft';
           if (STATE.appTab === 'draft' || STATE.draftPreviewMode) return renderCaptainNav() + renderDraft();
           const captainModal = STATE.modal ? renderModal() : '';
           const captainDraftDone = STATE.league.draftState?.status === 'done' || STATE.league.status === 'season' || STATE.league.status === 'playoffs' || STATE.league.status === 'complete';
