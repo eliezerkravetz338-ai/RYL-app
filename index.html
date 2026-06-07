@@ -1776,7 +1776,7 @@
         if (saveErr) {
           console.error('saveState failed:', saveErr.message);
         }
-        setTimeout(() => { _saving = false; }, 500);
+        setTimeout(() => { _saving = false; }, 1500);
       } else {
         // Not logged in — use localStorage as fallback
         try {
@@ -4583,7 +4583,7 @@
         let actions = '';
         const isComm = STATE.memberRole === 'commissioner';
         const isMyGame = !!(myTeamId && (g.home === myTeamId || g.away === myTeamId));
-        if (!isComm && !isMyGame) {
+        if (!isComm) {
           actions = '';
         } else if (isUpcoming) {
           actions = `<div style='display:flex;gap:6px;padding:10px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
