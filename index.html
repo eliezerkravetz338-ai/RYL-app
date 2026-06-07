@@ -2721,7 +2721,7 @@
           <div style='font-size:14px;font-weight:700;color:var(--gd);margin-top:8px'>🏆 ${winner} wins</div>
         </div>`,
         `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Keep Playing</button>
-         <button class='btn btn-p btn-sm' onclick='closeModal();markScoreFinal("${gid}",true)'>✓ End Game</button>`
+         <button class='btn btn-p btn-sm' onclick='markScoreFinal("${gid}",true)'>✓ End Game</button>`
       );
     }
 
@@ -2839,7 +2839,8 @@
       STATE.league.currentDayGameNum = g.gameNum;
       STATE.schedGame = g.gameNum;
       ensureLockedGameOfDay(STATE.league, g.gameNum);
-      closeModal();
+      STATE.modal = null;
+      _saving = false;
       R();
     }
     function markScoreFinal(gid, usePending = false) {
@@ -2858,8 +2859,8 @@
       g.as = as;
       g.status = 'final';
       completeGameDayIfReady(g.gameNum);
-      saveState();
-      closeModal();
+      STATE.modal = null;
+      _saving = false;
       R();
     }
     function saveScore(gid) { markScoreFinal(gid); }
