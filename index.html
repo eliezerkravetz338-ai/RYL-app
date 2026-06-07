@@ -1804,7 +1804,11 @@
               .in('id', leagueIds);
 
             if (leagues && leagues.length > 0) {
-              STATE.leagues = leagues.map(l => ({ ...l.data, id: l.id, name: l.name }));
+              STATE.leagues = leagues.map(l => {
+                const d = { ...l.data, id: l.id, name: l.name };
+                if (d.status === 'transition') d.status = d.transitionMode === 'draft' ? 'lobby' : d.transitionMode === 'playoff' ? 'playoffs' : 'season';
+                return d;
+              });
               // Set active league
               const saved = localStorage.getItem(ACTIVE_LEAGUE_KEY);
               const active = STATE.leagues.find(l => l.id === saved) || STATE.leagues[0];
@@ -4127,7 +4131,9 @@
     function renderMemberSeasonHome() {
       const l = STATE.league;
       if (l.status === 'playoffs' || l.status === 'complete') return renderHome();
-      const myTeamId = STATE.memberTeamId || l.players.find(p => p.userId === STATE.user?.id || p.id === STATE.user?.id)?.teamId;
+      const myTeamId = STATE.memberTeamId
+        || l.players.find(p => p.userId === STATE.user?.id || p.id === STATE.user?.id)?.teamId
+        || l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); })?.id;
       const myTeam = myTeamId ? l.teams.find(t => t.id === myTeamId) : null;
       const myRecord = myTeamId ? calcRec(myTeamId, l.games) : { w:0, l:0, pf:0, pa:0 };
       const standings = getStandingsRows(l);
@@ -4565,7 +4571,7 @@
             <div style='flex:1;min-width:0'>
               <div style='font-size:14px;font-weight:${won?"800":lost?"500":"600"};color:${lost?"#94a3b8":"#111"}'>${team?.name||'TBD'}</div>
             </div>
-            ${isLive ? `
+            ${isLive && (isComm || isMyGame) ? `
               <div style='display:flex;align-items:center;gap:6px'>
                 <button onclick='adjustGameScore("${g.id}","${side}",-1)' style='width:26px;height:26px;border-radius:6px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:13px;font-weight:700;color:#374151;cursor:pointer;display:flex;align-items:center;justify-content:center'>−</button>
                 <button onclick='adjustGameScore("${g.id}","${side}",1)' style='width:26px;height:26px;border-radius:6px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:12px;font-weight:700;color:#374151;cursor:pointer'>+1</button>
@@ -4583,8 +4589,20 @@
         let actions = '';
         const isComm = STATE.memberRole === 'commissioner';
         const isMyGame = !!(myTeamId && (g.home === myTeamId || g.away === myTeamId));
-        if (!isComm) {
-          actions = '';
+        if (!isComm && !isMyGame) {
+          actions = ''; // No actions for uninvolved users
+        } else if (!isComm && isMyGame) {
+          // Captain for own game — limited actions only
+          if (isLive) {
+            actions = `<div style='display:flex;gap:6px;padding:10px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
+              <button onclick='scoreGame("${g.id}")' style='padding:6px 14px;border-radius:8px;background:#f1f5f9;color:#374151;border:1px solid #e2e8f0;font-size:12px;font-weight:600;cursor:pointer'>✏️ Edit</button>
+              <button onclick='endGame("${g.id}")' style='padding:6px 16px;border-radius:8px;background:#111;color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer'>■ End Game</button>
+            </div>`;
+          } else if (isFinal) {
+            actions = `<div style='display:flex;gap:6px;padding:10px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
+              <button class='btn btn-o btn-xs' onclick='scoreGame("${g.id}")'>✏️ Edit Score</button>
+            </div>`;
+          }
         } else if (isUpcoming) {
           actions = `<div style='display:flex;gap:6px;padding:10px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
             ${isComm ? `<button class='btn btn-o btn-xs' style='color:#f59e0b;border-color:#f59e0b' onclick='postponeGame("${g.id}")'>Postpone</button>
