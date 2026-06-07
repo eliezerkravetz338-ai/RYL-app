@@ -1768,13 +1768,11 @@
       if (STATE.user && STATE.activeLeagueId && STATE.league) {
         if (_saving) return;
         _saving = true;
-        const { error: saveErr } = await sb.from('leagues').upsert({
-          id: STATE.activeLeagueId,
+        const { error: saveErr } = await sb.from('leagues').update({
           name: STATE.league.name || 'My League',
-          commissioner_id: STATE.user.id,
           data: STATE.league,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
+        }).eq('id', STATE.activeLeagueId);
         if (saveErr) {
           console.error('saveState failed:', saveErr.message);
         }
@@ -3050,7 +3048,7 @@
         R();
       }, 3200);
     }
-    function beginSeasonTransition() { if (!STATE.league) return; clearTimeout(STATE.transitionTimeout); ensureLockedGameOfDay(STATE.league, STATE.league.currentDayGameNum || 1); STATE.league = { ...STATE.league, transitionMode: 'season', status: 'season', seasonEntered: true }; STATE.appTab = 'home'; R(); }
+    function beginSeasonTransition() { if (!STATE.league) return; clearTimeout(STATE.transitionTimeout); ensureLockedGameOfDay(STATE.league, STATE.league.currentDayGameNum || 1); STATE.league = { ...STATE.league, transitionMode: 'season', status: 'season', seasonEntered: true }; STATE.appTab = 'home'; STATE.draftPreviewMode = false; R(); }
     function startDraftNow() { const l = STATE.league; const order = l.draftOrder?.length === l.teams.length ? l.draftOrder : l.teams.map(t => t.id); const captainCount = l.teams.filter(t => t.captainId).length; STATE.league = { ...l, status: 'draft', draftState: { status: 'active', idx: 0, order, picks: [], total: l.teams.length * l.ppt - captainCount, secs: l.timerSecs, queue: [] } }; STATE.appTab = 'draft'; R(); startTimer(); }
     function wizNext() { const l = STATE.league; if (STATE.wizStep === 0 && !l.name?.trim()) { alert('Please enter a league name'); return; } STATE.wizStep++; R(); }
     function prevWiz() { STATE.wizStep--; R(); }
@@ -4128,6 +4126,7 @@
 
     function renderMemberSeasonHome() {
       const l = STATE.league;
+      if (l.status === 'playoffs' || l.status === 'complete') return renderHome();
       const myTeamId = STATE.memberTeamId || l.players.find(p => p.userId === STATE.user?.id || p.id === STATE.user?.id)?.teamId;
       const myTeam = myTeamId ? l.teams.find(t => t.id === myTeamId) : null;
       const myRecord = myTeamId ? calcRec(myTeamId, l.games) : { w:0, l:0, pf:0, pa:0 };
@@ -4583,6 +4582,7 @@
         // Action buttons
         let actions = '';
         const isComm = STATE.memberRole === 'commissioner';
+        const isMyGame = !!(myTeamId && (g.home === myTeamId || g.away === myTeamId));
         if (!isComm && !isMyGame) {
           actions = '';
         } else if (isUpcoming) {
@@ -4607,7 +4607,6 @@
           </div>`;
         }
 
-       const isMyGame = !!(myTeamId && (g.home === myTeamId || g.away === myTeamId));
         return `<div style='background:#fff;border:1px solid ${isLive?"#fca5a5":isMyGame?"rgba(22,163,74,.4)":"#e2e8f0"};border-radius:12px;overflow:hidden;box-shadow:${isLive?"0 0 0 2px rgba(239,68,68,.15),0 1px 4px rgba(0,0,0,.06)":isMyGame?"0 0 0 2px rgba(22,163,74,.1),0 1px 4px rgba(0,0,0,.06)":"0 1px 4px rgba(0,0,0,.06)"}'>
           <!-- Status bar -->
           <div style='display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:${isLive?"#fff7f7":isMyGame?"rgba(22,163,74,.04)":"#fafafa"};border-bottom:1px solid ${isLive?"#fecaca":isMyGame?"rgba(22,163,74,.15)":"#f1f5f9"}'>
@@ -4773,6 +4772,7 @@
       const myTeamId = myLeagueTeam?.id || STATE.memberTeamId;
       const isMyTurn = STATE.memberRole === 'captain' && !!myTeamId && myTeamId === currentTid;
       const isCapt = STATE.memberRole === 'captain';
+      const onClockBanner = isMyTurn && ds.status === 'active' ? `<div style='background:linear-gradient(90deg,#16a34a,#15803d);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:52px;z-index:50;box-shadow:0 4px 16px rgba(22,163,74,.35)'><div style='display:flex;align-items:center;gap:10px'><span style='width:10px;height:10px;border-radius:50%;background:#fff;animation:pulseDot 1.2s infinite;flex-shrink:0'></span><span style='font-size:15px;font-weight:800;color:#fff'>YOU'RE ON THE CLOCK</span><span style='font-size:13px;color:rgba(255,255,255,.75);font-weight:600'>— Make your pick!</span></div><span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:18px;color:#fff'>${currentTeam?.name||''}</span></div>` : '';
           const currentRound = Math.floor(ds.idx / l.teams.length) + 1;
           const totalRounds = Math.ceil(ds.total / l.teams.length);
           const recentPick = ds.picks.at(-1);
@@ -4956,7 +4956,7 @@
         return { num: idx + 1, team, cur: i===0, next: i===1 || i===2 };
       }).filter(Boolean);
 
-      return `<div class='draft-hero' style='background:linear-gradient(180deg,#0b0f14 0%,#111827 100%);border-bottom:1px solid #1f2937'>
+      return onClockBanner + `<div class='draft-hero' style='background:linear-gradient(180deg,#0b0f14 0%,#111827 100%);border-bottom:1px solid #1f2937'>
         <div class='draft-top'>
           <div class='otc-left'>
             ${currentTeam ? `${teamAvatar(currentTeam, 'team-av-lg')}` : ''}
@@ -5044,6 +5044,7 @@
         </div>
       </div>
       ${ds.status === 'paused' ? `<div class='draft-overlay-note'><div class='draft-overlay-card'><div class='draft-overlay-kicker'>Draft Paused</div><div class='draft-overlay-name'>Room Frozen</div><div class='draft-overlay-sub'>Resume when captains are ready for the next pick.</div><div style='margin-top:14px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap'><button class='btn btn-o btn-sm' onclick='resumeDraft()' style='background:#fff;color:var(--t1);border:none'>Resume Draft</button><button class='btn btn-gh btn-sm' onclick="STATE.appTab='commissioner';STATE.commOpen={...STATE.commOpen||{},draft:true};R()" style='background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.18)'>Commissioner</button></div></div></div>` : ''}
+      ${STATE.draftFlash ? `<div style='position:fixed;inset:0;z-index:400;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.85)'><div style='position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,${STATE.draftFlash.color}20,transparent 65%);pointer-events:none'></div><div style='position:relative;z-index:1;text-align:center;padding:0 32px;animation:flashIn .35s cubic-bezier(.34,1.56,.64,1);width:100%'><div style='font-size:13px;font-weight:800;color:rgba(255,255,255,.35);letter-spacing:3px;text-transform:uppercase;margin-bottom:16px'>With the ${STATE.draftFlash.pickNum}${STATE.draftFlash.pickNum===1?'st':STATE.draftFlash.pickNum===2?'nd':STATE.draftFlash.pickNum===3?'rd':'th'} overall pick</div><div style='display:inline-flex;align-items:center;gap:10px;background:${STATE.draftFlash.color}28;border:2px solid ${STATE.draftFlash.color}70;border-radius:999px;padding:10px 28px;margin-bottom:24px'><div style='width:14px;height:14px;border-radius:50%;background:${STATE.draftFlash.color}'></div><span style='font-size:20px;font-weight:900;color:#fff'>${STATE.draftFlash.team}</span></div><div style='font-size:14px;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:3px;margin-bottom:12px'>Selects</div><div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:clamp(60px,10vw,100px);color:#fff;line-height:.9;letter-spacing:-2px;text-shadow:0 0 80px ${STATE.draftFlash.color}'>${STATE.draftFlash.player}</div><div style='width:160px;height:4px;background:${STATE.draftFlash.color};border-radius:999px;margin:24px auto 0;box-shadow:0 0 20px ${STATE.draftFlash.color}'></div></div></div>` : ''}
       `;
     }
 
