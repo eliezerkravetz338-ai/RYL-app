@@ -1913,8 +1913,9 @@
       try { localStorage.removeItem('ryl_app_state_original_ui_clean_v2'); localStorage.removeItem('ryl_leagues_v1'); localStorage.removeItem('ryl_active_league_v1'); } catch(e) {}
       await loadState();
       STATE.authLoading = false;
-      STATE.screen = STATE.leagues.length > 0 ? 'app' : 'landing';
-      R();
+      if (STATE.authIntent === 'create') { STATE.authIntent = null; createNewLeague(); }
+      else if (STATE.authIntent === 'join') { STATE.authIntent = null; STATE.screen = 'join'; R(); }
+      else { STATE.screen = STATE.leagues.length > 0 ? 'app' : 'landing'; R(); }
     }
 
     async function signIn(email, password) {
@@ -1945,8 +1946,9 @@
       try { localStorage.removeItem('ryl_app_state_original_ui_clean_v2'); localStorage.removeItem('ryl_leagues_v1'); localStorage.removeItem('ryl_active_league_v1'); } catch(e) {}
       await loadState();
       STATE.authLoading = false;
-      STATE.screen = STATE.leagues.length > 0 ? 'app' : 'landing';
-      R();
+      if (STATE.authIntent === 'create') { STATE.authIntent = null; createNewLeague(); }
+      else if (STATE.authIntent === 'join') { STATE.authIntent = null; STATE.screen = 'join'; R(); }
+      else { STATE.screen = STATE.leagues.length > 0 ? 'app' : 'landing'; R(); }
     }
 
     function showLeagueCode() {
@@ -3405,46 +3407,32 @@
 
     function renderAuth() {
       const isSignup = STATE.screen === 'signup';
+      const intent = STATE.authIntent;
+      const subtitle = isSignup
+        ? (intent === 'join' ? 'Create an account to join your league' : intent === 'create' ? 'Create an account to set up your league' : 'Sign up to run or join a league')
+        : 'Sign in to your account';
       return `
         <div style='min-height:100vh;background:linear-gradient(135deg,#07110b,#0b1220,#111827);display:flex;align-items:center;justify-content:center;padding:20px'>
           <div style='width:100%;max-width:380px'>
-            <!-- Logo -->
             <div style='text-align:center;margin-bottom:32px'>
               <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:48px;color:#fff;letter-spacing:-1px;line-height:1'>RYL</div>
               <div style='font-size:13px;color:rgba(255,255,255,.4);margin-top:4px;letter-spacing:1px;text-transform:uppercase'>Run Your League</div>
             </div>
-
-            <!-- Card -->
             <div style='background:#fff;border-radius:20px;padding:28px;box-shadow:0 24px 60px rgba(0,0,0,.4)'>
               <h2 style='font-size:20px;font-weight:800;color:#111;margin-bottom:6px'>${isSignup ? 'Create Account' : 'Welcome Back'}</h2>
-              <p style='font-size:13px;color:#94a3b8;margin-bottom:20px'>${isSignup ? 'Sign up to run or join a league' : 'Sign in to your account'}</p>
-
+              <p style='font-size:13px;color:#94a3b8;margin-bottom:20px'>${subtitle}</p>
               ${STATE.authError ? `<div style='background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;font-size:12px;color:#dc2626;margin-bottom:14px'>${STATE.authError}</div>` : ''}
-
-              ${isSignup ? `
-                <div style='margin-bottom:12px'>
-                  <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px'>Display Name</label>
-                  <input id='auth-name' type='text' placeholder='Your name' value='${STATE.signupName||''}' oninput="STATE.signupName=this.value" style='width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;color:#111;outline:none;background:#fff'>
-                </div>` : ''}
-
-              <div style='margin-bottom:12px'>
-                <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px'>Email</label>
-                <input id='auth-email' type='email' placeholder='you@example.com' style='width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;color:#111;outline:none;background:#fff'>
-              </div>
-              <div style='margin-bottom:20px'>
-                <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px'>Password</label>
-                <input id='auth-password' type='password' placeholder='Min 8 characters' style='width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;color:#111;outline:none;background:#fff'>
-                ${isSignup ? `<div style='font-size:11px;color:#94a3b8;margin-top:4px'>Must be at least 8 characters</div>` : ''}
-              </div>
-
-              <button onclick='handleAuth()' style='width:100%;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px'>
-                ${isSignup ? 'Create Account' : 'Sign In'}
-              </button>
-
+              ${isSignup ? `<div style='margin-bottom:12px'><label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px'>Your Name</label><input id='auth-name' type='text' placeholder='Your name' value='${STATE.signupName||''}' oninput="STATE.signupName=this.value" style='width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;color:#111;outline:none;box-sizing:border-box'></div>` : ''}
+              <div style='margin-bottom:12px'><label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px'>Email</label><input id='auth-email' type='email' placeholder='you@example.com' style='width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;color:#111;outline:none;box-sizing:border-box'></div>
+              <div style='margin-bottom:20px'><label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px'>Password</label><input id='auth-password' type='password' placeholder='Min 8 characters' style='width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;color:#111;outline:none;box-sizing:border-box'></div>
+              <button onclick='handleAuth()' style='width:100%;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px'>${isSignup ? 'Create Account' : 'Sign In'}</button>
               <div style='text-align:center;font-size:13px;color:#94a3b8'>
                 ${isSignup
                   ? `Already have an account? <button onclick="STATE.screen='auth';STATE.authError=null;R()" style='background:none;border:none;color:#16a34a;font-weight:700;cursor:pointer;font-size:13px'>Sign In</button>`
                   : `Don't have an account? <button onclick="STATE.screen='signup';STATE.authError=null;R()" style='background:none;border:none;color:#16a34a;font-weight:700;cursor:pointer;font-size:13px'>Sign Up</button>`}
+              </div>
+              <div style='text-align:center;margin-top:12px'>
+                <button onclick="STATE.screen='landing';STATE.authError=null;R()" style='background:none;border:none;color:#94a3b8;font-size:12px;cursor:pointer'>← Back</button>
               </div>
             </div>
           </div>
@@ -3505,9 +3493,54 @@
     }
 
     function renderLanding() {
-      const hasSavedLeague = !!STATE.league;
-      return `<div class='nav'><div style='display:flex;align-items:center'><span class='logo-mark'>RYL</span><span class='logo-text'>Run Your League</span></div></div><div class='land'><div class='land-eye'>🏀 Built for camps & schools</div><div class='land-h1'>Your league.<br><em>Your draft.</em><br>Your season.</div><div class='land-sub'>The modern platform for running camp and school sports leagues. Draft, schedule, and track your whole season — all in one place.</div><div class='land-btns'><button class='btn btn-p btn-xl' onclick="createNewLeague()">Create League</button><button class='btn btn-d btn-xl' onclick="STATE.user ? (STATE.screen='join',R()) : (STATE.screen='auth',R())">Join League</button>${STATE.leagues.length > 0 ? `<button class='btn btn-o btn-xl' onclick="STATE.screen='app';R()">My Leagues (${STATE.leagues.length})</button>` : ''}</div>
-        ${hasSavedLeague ? `<div style='position:relative;margin-top:-24px;margin-bottom:20px;display:flex;gap:10px;justify-content:center'><button class='btn btn-gh btn-sm' onclick="clearSavedState();STATE={...STATE,screen:'landing',league:null,wizStep:0,appTab:'home',commTab:'league',schedGame:1,rosterFocus:null,modal:null,draftTimer:null,searchDraft:'',joinColor:null,transitionTimeout:null};R()">Clear Saved League</button></div>` : ''}<div class='land-stats'>${[['500+','Leagues Created'],['12K+','Players Drafted'],['98%','Love It']].map(([v,l]) => `<div style='text-align:center'><div class='ls-v'>${v}</div><div class='ls-l'>${l}</div></div>`).join('')}</div></div>`; }
+      return `
+        <div class='nav'>
+          <div style='display:flex;align-items:center;gap:8px'>
+            <span class='logo-mark'>RYL</span>
+            <span class='logo-text'>Run Your League</span>
+          </div>
+        </div>
+        <div style='min-height:calc(100vh - 52px);background:linear-gradient(160deg,#07110b,#0b1220,#111827);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px'>
+
+          <div style='text-align:center;margin-bottom:40px'>
+            <div style='font-size:12px;font-weight:800;color:var(--gd);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px'>🏀 Built for camps &amp; schools</div>
+            <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:48px;color:#fff;line-height:.95;letter-spacing:-1px;margin-bottom:10px'>Your league.<br><em style='color:var(--gd)'>Your way.</em></div>
+            <div style='font-size:15px;color:rgba(255,255,255,.45);max-width:320px;margin:0 auto;line-height:1.5'>Draft, schedule, and track your whole season — all in one place.</div>
+          </div>
+
+          <div style='display:flex;gap:14px;width:100%;max-width:600px;flex-wrap:wrap'>
+
+            <div style='flex:1;min-width:240px;background:#fff;border-radius:20px;padding:28px 24px;display:flex;flex-direction:column;gap:20px'>
+              <div>
+                <div style='font-size:36px;margin-bottom:12px'>🏀</div>
+                <div style='font-size:22px;font-weight:800;color:#111;margin-bottom:6px'>Join a League</div>
+                <div style='font-size:14px;color:#64748b;line-height:1.5'>Have a league code? Create an account and jump straight in.</div>
+              </div>
+              <button onclick="STATE.authIntent='join';STATE.screen='signup';STATE.authError=null;R()" style='width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.2px'>
+                Join Now
+              </button>
+            </div>
+
+            <div style='flex:1;min-width:240px;background:#fff;border-radius:20px;padding:28px 24px;display:flex;flex-direction:column;gap:20px'>
+              <div>
+                <div style='font-size:36px;margin-bottom:12px'>➕</div>
+                <div style='font-size:22px;font-weight:800;color:#111;margin-bottom:6px'>Create a League</div>
+                <div style='font-size:14px;color:#64748b;line-height:1.5'>Be the commissioner. Set up your league and run the whole season.</div>
+              </div>
+              <button onclick="STATE.authIntent='create';STATE.screen='signup';STATE.authError=null;R()" style='width:100%;padding:14px;background:#111;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.2px'>
+                Create Now
+              </button>
+            </div>
+
+          </div>
+
+          <div style='margin-top:28px;font-size:14px;color:rgba(255,255,255,.4)'>
+            Already have an account?
+            <button onclick="STATE.authIntent=null;STATE.screen='auth';STATE.authError=null;R()" style='background:none;border:none;color:#4ade80;font-weight:700;cursor:pointer;font-size:14px;margin-left:4px'>Sign In</button>
+          </div>
+
+        </div>`;
+    }
     function wizS0() { const l = STATE.league; return `<div class='wiz-title'>Create Your League</div><div class='wiz-sub'>Start with the basics — clean and simple.</div><div class='fg'><label class='fl'>League Name</label><input class='fi' placeholder='e.g. Nitzanim Basketball 2025' value='${l.name}' oninput="STATE.league.name=this.value"></div><div class='fg'><label class='fl'>Division / Group</label><input class='fi' placeholder='e.g. Nitzanim, Senior Division' value='${l.division}' oninput="STATE.league.division=this.value"></div><div class='fg'><label class='fl'>Sport</label><select class='fi'><option>Basketball 🏀</option></select></div>`; }
 
     function cleanInitials(name) {
