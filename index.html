@@ -1859,10 +1859,11 @@
         .single();
       if (league) {
         const updated = { ...league.data, id: league.id, name: league.name };
+        delete updated._saveId;
         STATE.league = updated;
         const idx = STATE.leagues.findIndex(l => l.id === league.id);
         if (idx >= 0) STATE.leagues[idx] = updated;
-        R();
+        renderOnly(); // render only — do NOT save back
       }
     }
 
@@ -2182,7 +2183,7 @@
           STATE.league = updated;
           const idx = STATE.leagues.findIndex(l => l.id === leagueId);
           if (idx >= 0) STATE.leagues[idx] = updated;
-          R();
+          renderOnly(); // render only — do NOT save back, breaks ping-pong loop
           // Start timer on this device if draft is active and timer isn't running
           if (updated.draftState?.status === 'active' && !STATE.draftTimer) startTimer();
         })
@@ -7327,6 +7328,17 @@ async function assignCaptain(playerId, teamId) {
       } catch (err) {
         console.error('RYL render error:', err);
         clearSavedState();
+        STATE.screen = 'landing';
+        STATE.league = null;
+        document.getElementById('app').innerHTML = renderLanding();
+      }
+    }
+
+    function renderOnly() {
+      try {
+        document.getElementById('app').innerHTML = renderApp();
+      } catch (err) {
+        console.error('RYL render error:', err);
         STATE.screen = 'landing';
         STATE.league = null;
         document.getElementById('app').innerHTML = renderLanding();
