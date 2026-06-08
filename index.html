@@ -3311,7 +3311,7 @@
         <div style='text-align:center;padding:20px;background:var(--f4);border-radius:16px;border:1px solid var(--b1)'>
           <div style='font-size:28px;margin-bottom:10px'>⏳</div>
           <div style='font-size:15px;font-weight:700;color:var(--t1);margin-bottom:6px'>Waiting for the draft to start</div>
-          <div style='font-size:12px;color:var(--t3)'>The commissioner will start the draft once all captains are in. You'll be taken to the draft board automatically.</div>
+          <div style='font-size:12px;color:var(--t3)'>The commissioner will start the draft once all captains have joined. You'll be taken to the draft board automatically.</div>
         </div>
       </div>`;
     }
@@ -3605,8 +3605,8 @@
       const stageTitle = stage === 1 ? 'Step 1 — Invite your captains'
         : stage === 2 ? `Step 2 — Waiting for captains (${claimed}/${total} ready)`
         : 'Step 3 — All captains ready!';
-      const stageSub = stage === 1 ? 'Share the league code below. Each captain joins on their own device and claims their team.'
-        : stage === 2 ? 'Once every team has a captain, the Start Draft button will unlock.'
+      const stageSub = stage === 1 ? 'First, assign captains to each team using the Edit League tab. Then share the league code so captains can join on their own device.'
+        : stage === 2 ? 'Share the league code with your remaining captains so they can join. Once every team has a captain, the draft will unlock.'
         : 'Everyone is in. Start the draft when your captains are at their devices.';
 
       return `<div style='max-width:600px;margin:0 auto;padding:24px 18px'>
@@ -3646,6 +3646,13 @@
             <div style='font-size:13px;font-weight:700;color:var(--t1)'>Captain Status</div>
             <div style='font-size:12px;font-weight:700;color:${ready ? '#16a34a' : 'var(--t3)'}'>${claimed}/${total} Ready</div>
           </div>
+          ${!ready ? `<div style='padding:12px 18px;background:#fffbeb;border-bottom:1px solid #fde68a;display:flex;align-items:center;justify-content:space-between;gap:12px'>
+            <div>
+              <div style='font-size:12px;font-weight:700;color:#92400e;margin-bottom:2px'>How to assign captains</div>
+              <div style='font-size:11px;color:#a16207;line-height:1.4'>Go to the Edit League tab → Captains section. Find each player and assign them as captain of their team.</div>
+            </div>
+            <button onclick="STATE.appTab='commissioner';STATE.commOpen={...STATE.commOpen||{},captains:true};R()" style='padding:8px 14px;border-radius:8px;background:#d97706;color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0'>Assign →</button>
+          </div>` : ''}
           ${l.teams.map(t => {
             const hasCaptain = !!(t.captainId || (t.cap && t.cap.trim()));
             const captainName = t.captainName || t.cap || '';
