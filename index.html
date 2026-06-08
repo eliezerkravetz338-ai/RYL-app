@@ -4896,9 +4896,9 @@
                   </div>
                 </div>
                 <div style='display:flex;gap:6px;margin-top:10px;flex-wrap:wrap'>
-                  ${ds.status === 'active' ? `<button class='btn btn-sm' style='background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);font-size:11px' onclick='pauseDraft()'>⏸ Pause</button>` : isPaused ? `<button class='btn btn-p btn-sm' onclick='resumeDraft()'>▶ Resume</button>` : ''}
-                  ${ds.status !== 'done' ? `<button class='btn btn-sm' style='background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);font-size:11px' onclick='autoPick()'>Auto Pick</button>` : ''}
-                  ${ds.status !== 'done' && STATE.lastPickSnapshot ? `<button class='btn btn-sm' style='background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b;font-size:11px' onclick='undoLastPick()'>↩ Undo</button>` : ''}
+                  ${!isCapt && ds.status === 'active' ? `<button class='btn btn-sm' style='background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);font-size:11px' onclick='pauseDraft()'>⏸ Pause</button>` : !isCapt && isPaused ? `<button class='btn btn-p btn-sm' onclick='resumeDraft()'>▶ Resume</button>` : ''}
+                  ${!isCapt && ds.status !== 'done' ? `<button class='btn btn-sm' style='background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);font-size:11px' onclick='autoPick()'>Auto Pick</button>` : ''}
+                  ${!isCapt && ds.status !== 'done' && STATE.lastPickSnapshot ? `<button class='btn btn-sm' style='background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b;font-size:11px' onclick='undoLastPick()'>↩ Undo</button>` : ''}
                 </div>
               </div>
             </div>`;
