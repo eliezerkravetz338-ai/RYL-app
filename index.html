@@ -3516,7 +3516,7 @@
                 <div style='font-size:22px;font-weight:800;color:#111;margin-bottom:6px'>Join a League</div>
                 <div style='font-size:14px;color:#64748b;line-height:1.5'>Have a league code? Create an account and jump straight in.</div>
               </div>
-              <button onclick="STATE.authIntent='join';STATE.screen='signup';STATE.authError=null;R()" style='width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.2px'>
+              <button onclick="STATE.user ? (STATE.screen='join',R()) : (STATE.authIntent='join',STATE.screen='signup',STATE.authError=null,R())" style='width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.2px'>
                 Join Now
               </button>
             </div>
@@ -3527,7 +3527,7 @@
                 <div style='font-size:22px;font-weight:800;color:#111;margin-bottom:6px'>Create a League</div>
                 <div style='font-size:14px;color:#64748b;line-height:1.5'>Be the commissioner. Set up your league and run the whole season.</div>
               </div>
-              <button onclick="STATE.authIntent='create';STATE.screen='signup';STATE.authError=null;R()" style='width:100%;padding:14px;background:#111;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.2px'>
+              <button onclick="STATE.user ? createNewLeague() : (STATE.authIntent='create',STATE.screen='signup',STATE.authError=null,R())" style='width:100%;padding:14px;background:#111;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.2px'>
                 Create Now
               </button>
             </div>
@@ -3535,8 +3535,9 @@
           </div>
 
           <div style='margin-top:28px;font-size:14px;color:rgba(255,255,255,.4)'>
-            Already have an account?
-            <button onclick="STATE.authIntent=null;STATE.screen='auth';STATE.authError=null;R()" style='background:none;border:none;color:#4ade80;font-weight:700;cursor:pointer;font-size:14px;margin-left:4px'>Sign In</button>
+            ${STATE.user
+              ? `<button onclick="STATE.screen='app';R()" style='background:none;border:none;color:#4ade80;font-weight:700;cursor:pointer;font-size:14px'>← Back to My League</button>`
+              : `Already have an account? <button onclick="STATE.authIntent=null;STATE.screen='auth';STATE.authError=null;R()" style='background:none;border:none;color:#4ade80;font-weight:700;cursor:pointer;font-size:14px;margin-left:4px'>Sign In</button>`}
           </div>
 
         </div>`;
