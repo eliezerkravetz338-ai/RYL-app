@@ -1768,15 +1768,17 @@
       if (STATE.user && STATE.activeLeagueId && STATE.league) {
         if (_saving) return;
         _saving = true;
+        const saveId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        _lastSaveId = saveId;
+        setTimeout(() => { _saving = false; }, 300);
         const { error: saveErr } = await sb.from('leagues').update({
           name: STATE.league.name || 'My League',
-          data: STATE.league,
+          data: { ...STATE.league, _saveId: saveId },
           updated_at: new Date().toISOString()
         }).eq('id', STATE.activeLeagueId);
         if (saveErr) {
           console.error('saveState failed:', saveErr.message);
         }
-        setTimeout(() => { _saving = false; }, 1500);
       } else {
         // Not logged in — use localStorage as fallback
         try {
@@ -2160,6 +2162,7 @@
     // ── Realtime subscription ──────────────────────────────────────
     let _realtimeChannel = null;
     let _saving = false;
+    let _lastSaveId = null;
 
     function subscribeToLeague(leagueId) {
       if (_realtimeChannel) _realtimeChannel.unsubscribe();
@@ -2172,8 +2175,10 @@
           table: 'leagues',
           filter: 'id=eq.' + leagueId
        }, payload => {
-          if (_saving) return;
           const updated = { ...payload.new.data, id: payload.new.id, name: payload.new.name };
+          // Only skip if this is our own echo — always accept updates from other devices
+          if (updated._saveId && updated._saveId === _lastSaveId) return;
+          delete updated._saveId;
           STATE.league = updated;
           const idx = STATE.leagues.findIndex(l => l.id === leagueId);
           if (idx >= 0) STATE.leagues[idx] = updated;
@@ -7301,6 +7306,13 @@ async function assignCaptain(playerId, teamId) {
           return playerNav + renderMemberSeasonHome() + playerModal;
         }
       } if (STATE.screen === 'landing') return renderLanding(); if (STATE.screen === 'wizard') return renderWizard(); if (STATE.screen === 'join') return renderJoin(); if (STATE.screen === 'app') return renderMainApp(); return renderLanding(); }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && STATE.activeLeagueId && STATE.user) {
+        _saving = false;
+        refreshLeagueFromDB();
+      }
+    });
+
     document.addEventListener('click', (e) => {
       if (STATE.showLeagueSwitcher && !e.target.closest('.league-switcher-root')) {
         STATE.showLeagueSwitcher = false;
