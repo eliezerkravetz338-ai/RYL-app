@@ -1828,6 +1828,8 @@
               // Store all memberships for league switching
               STATE.allMemberships = memberships;
               STATE.screen = 'app';
+            } else {
+              STATE.screen = 'myleagues';
             }
           }
         } catch (err) {
@@ -3433,7 +3435,7 @@
                   : `Don't have an account? <button onclick="STATE.screen='signup';STATE.authError=null;R()" style='background:none;border:none;color:#16a34a;font-weight:700;cursor:pointer;font-size:13px'>Sign Up</button>`}
               </div>
               <div style='text-align:center;margin-top:12px'>
-                <button onclick="STATE.screen='landing';STATE.authError=null;R()" style='background:none;border:none;color:#94a3b8;font-size:12px;cursor:pointer'>← Back</button>
+                <button onclick='goHome()' style='background:none;border:none;color:#94a3b8;font-size:12px;cursor:pointer'>← Back</button>
               </div>
             </div>
           </div>
@@ -3462,7 +3464,7 @@
               <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:48px;color:#fff;letter-spacing:-1px'>RYL</div>
             </div>
             <div style='background:#fff;border-radius:20px;padding:28px;box-shadow:0 24px 60px rgba(0,0,0,.4)'>
-              <button onclick="STATE.screen='landing';R()" style='background:none;border:none;color:#94a3b8;font-size:13px;cursor:pointer;margin-bottom:16px;display:flex;align-items:center;gap:4px'>← Back</button>
+              <button onclick='goHome()' style='background:none;border:none;color:#94a3b8;font-size:13px;cursor:pointer;margin-bottom:16px;display:flex;align-items:center;gap:4px'>← Back</button>
               <h2 style='font-size:20px;font-weight:800;color:#111;margin-bottom:4px'>Join a League</h2>
               <p style='font-size:13px;color:#94a3b8;margin-bottom:20px'>Fill in your info to join</p>
 
@@ -3537,12 +3539,97 @@
 
           <div style='margin-top:28px;font-size:14px;color:rgba(255,255,255,.4)'>
             ${STATE.user
-              ? `<button onclick="STATE.screen='app';R()" style='background:none;border:none;color:#4ade80;font-weight:700;cursor:pointer;font-size:14px'>← Back to My League</button>`
+              ? `<button onclick='goHome()' style='background:none;border:none;color:#4ade80;font-weight:700;cursor:pointer;font-size:14px'>← My Leagues</button>`
               : `Already have an account? <button onclick="STATE.authIntent=null;STATE.screen='auth';STATE.authError=null;R()" style='background:none;border:none;color:#4ade80;font-weight:700;cursor:pointer;font-size:14px;margin-left:4px'>Sign In</button>`}
           </div>
 
         </div>`;
     }
+    function goHome() {
+      STATE.screen = 'myleagues';
+      R();
+    }
+
+    function enterLeague(leagueId) {
+      const league = STATE.leagues.find(l => l.id === leagueId);
+      if (!league) return;
+      STATE.activeLeagueId = leagueId;
+      STATE.league = league;
+      const membership = (STATE.allMemberships || []).find(m => m.league_id === leagueId);
+      if (membership) {
+        STATE.memberRole = membership.role;
+        STATE.memberTeamId = membership.team_id;
+      } else {
+        STATE.memberRole = null;
+        STATE.memberTeamId = null;
+      }
+      try { localStorage.setItem(ACTIVE_LEAGUE_KEY, leagueId); } catch(e) {}
+      STATE.appTab = 'home';
+      STATE.screen = 'app';
+      subscribeToLeague(leagueId);
+      R();
+    }
+
+    function renderMyLeagues() {
+      const leagues = STATE.leagues || [];
+      const memberships = STATE.allMemberships || [];
+
+      const leagueCards = leagues.map(l => {
+        const m = memberships.find(mb => mb.league_id === l.id);
+        const role = m?.role || 'commissioner';
+        const myTeam = role !== 'commissioner' && m?.team_id ? (l.teams || []).find(t => t.id === m.team_id) : null;
+        const statusLabel = { lobby: 'In Lobby', draft: 'Draft Day', season: 'Season Active', playoffs: 'Playoffs', complete: 'Complete' }[l.status] || l.status;
+        const statusColor = { season: '#16a34a', draft: '#2563eb', playoffs: '#7c3aed', complete: '#64748b', lobby: '#d97706' }[l.status] || '#64748b';
+        const roleLabel = role === 'commissioner' ? '⭐ Commissioner' : role === 'captain' ? `Captain${myTeam ? ' · ' + myTeam.name : ''}` : `Player${myTeam ? ' · ' + myTeam.name : ''}`;
+        const accentColor = (l.teams && l.teams[0]?.color) || '#16a34a';
+        return `
+          <div style='background:#fff;border:1.5px solid var(--b1);border-radius:16px;overflow:hidden;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06)'>
+            <div style='height:4px;background:${accentColor}'></div>
+            <div style='padding:16px 18px;display:flex;align-items:center;gap:14px'>
+              <div style='width:46px;height:46px;border-radius:12px;background:var(--n2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0'>🏀</div>
+              <div style='flex:1;min-width:0'>
+                <div style='font-size:16px;font-weight:800;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>${l.name || 'Unnamed League'}</div>
+                <div style='font-size:12px;color:var(--t3);margin-top:1px'>${roleLabel}</div>
+                <span style='display:inline-block;margin-top:5px;background:${statusColor}18;color:${statusColor};font-size:10px;font-weight:800;padding:2px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.6px'>${statusLabel}</span>
+              </div>
+              <button onclick='enterLeague("${l.id}")' style='padding:11px 20px;background:var(--n2);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0'>Enter →</button>
+            </div>
+          </div>`;
+      }).join('');
+
+      return `
+        <div style='min-height:100vh;background:#f1f5f9'>
+          <div style='background:var(--n2);padding:14px 20px;display:flex;align-items:center;justify-content:space-between'>
+            <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:26px;color:#fff;letter-spacing:-0.5px'>RYL</div>
+            ${STATE.user ? `<button onclick='confirmSignOut()' style='background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer'>Sign Out</button>` : ''}
+          </div>
+          <div style='max-width:480px;margin:0 auto;padding:24px 16px'>
+            <div style='font-size:24px;font-weight:900;color:var(--t1);margin-bottom:4px'>My Leagues</div>
+            <div style='font-size:13px;color:var(--t3);margin-bottom:22px'>${leagues.length ? 'Tap a league to jump right in.' : 'You are not in any leagues yet.'}</div>
+
+            ${leagueCards}
+
+            <div style='margin-top:${leagues.length ? '8px' : '0'}'>
+              <button onclick='createNewLeague()' style='width:100%;background:#fff;border:1.5px dashed #86efac;border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:14px;cursor:pointer;text-align:left;margin-bottom:10px'>
+                <div style='width:46px;height:46px;border-radius:12px;background:#16a34a;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0'>➕</div>
+                <div>
+                  <div style='font-size:15px;font-weight:800;color:#15803d'>Create a League</div>
+                  <div style='font-size:12px;color:#16a34a;margin-top:2px'>Be the commissioner and run your own league</div>
+                </div>
+              </button>
+              <button onclick="STATE.screen='join';R()" style='width:100%;background:#fff;border:1.5px dashed #93c5fd;border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:14px;cursor:pointer;text-align:left'>
+                <div style='width:46px;height:46px;border-radius:12px;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0'>🔑</div>
+                <div>
+                  <div style='font-size:15px;font-weight:800;color:#1d4ed8'>Join a League</div>
+                  <div style='font-size:12px;color:#2563eb;margin-top:2px'>Have a league code? Enter it here</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+        ${STATE.modal ? renderModal() : ''}`;
+    }
+
     function cleanInitials(name) {
       const fallback = String(name || 'Team').trim();
       const parts = fallback.split(/\s+/).filter(Boolean);
@@ -3734,7 +3821,7 @@
           &#x2705; A league code will be generated automatically. Share it with your captains from the lobby.
         </div>`; }
 
-    function renderWizard() { const l = STATE.league; const s = STATE.wizStep; const pb = WIZARD_STEPS.map((name, i) => `<div style='display:flex;align-items:center;${i < WIZARD_STEPS.length - 1 ? 'flex:1' : ''}'><div class='pb-c ${i < s ? 'done' : i === s ? 'act' : 'pend'}'>${i < s ? '✓' : i + 1}</div><span class='pb-lbl ${i === s ? 'act' : ''}'>${name}</span></div>${i < WIZARD_STEPS.length - 1 ? `<div class='pb-line ${i < s ? 'done' : ''}'></div>` : ''}`).join(''); let body = ''; if (s === 0) body = wizS0(); else if (s === 1) body = wizS1(); else if (s === 2) body = wizS2(); else if (s === 3) body = wizS3(); else if (s === 4) body = wizS4(); else body = wizS5(); const nextBtn = s < 5 ? `<button class='btn btn-p' onclick='wizNext()'>Continue →</button>` : `<button class='btn btn-p btn-lg' onclick='launchLeague(STATE.league)' ${!l.name ? 'disabled' : ''}>Launch League 🚀</button>`; return `<div class='nav'><div style='display:flex;align-items:center'><span class='logo-mark'>RYL</span><span class='logo-text'>Run Your League</span></div><button class='btn btn-d btn-sm' onclick="STATE.screen='landing';R()">← Home</button></div><div class='wiz-wrap'><div class='wiz-inner'><div class='pb'>${pb}</div><div class='wiz-card'>${body}<div class='wiz-foot'><button class='btn btn-gh btn-sm' onclick="${s === 0 ? `STATE.screen='landing';R()` : 'prevWiz()'}">${s === 0 ? '← Home' : '← Back'}</button><span class='step-info'>${s + 1} of ${WIZARD_STEPS.length}</span>${nextBtn}</div></div></div></div>${STATE.modal ? renderModal() : ''}`; }
+    function renderWizard() { const l = STATE.league; const s = STATE.wizStep; const pb = WIZARD_STEPS.map((name, i) => `<div style='display:flex;align-items:center;${i < WIZARD_STEPS.length - 1 ? 'flex:1' : ''}'><div class='pb-c ${i < s ? 'done' : i === s ? 'act' : 'pend'}'>${i < s ? '✓' : i + 1}</div><span class='pb-lbl ${i === s ? 'act' : ''}'>${name}</span></div>${i < WIZARD_STEPS.length - 1 ? `<div class='pb-line ${i < s ? 'done' : ''}'></div>` : ''}`).join(''); let body = ''; if (s === 0) body = wizS0(); else if (s === 1) body = wizS1(); else if (s === 2) body = wizS2(); else if (s === 3) body = wizS3(); else if (s === 4) body = wizS4(); else body = wizS5(); const nextBtn = s < 5 ? `<button class='btn btn-p' onclick='wizNext()'>Continue →</button>` : `<button class='btn btn-p btn-lg' onclick='launchLeague(STATE.league)' ${!l.name ? 'disabled' : ''}>Launch League 🚀</button>`; return `<div class='nav'><div style='display:flex;align-items:center'><span class='logo-mark'>RYL</span><span class='logo-text'>Run Your League</span></div><button class='btn btn-d btn-sm' onclick='goHome()'>← Home</button></div><div class='wiz-wrap'><div class='wiz-inner'><div class='pb'>${pb}</div><div class='wiz-card'>${body}<div class='wiz-foot'><button class='btn btn-gh btn-sm' onclick="${s === 0 ? 'goHome()' : 'prevWiz()'}">${s === 0 ? '← Home' : '← Back'}</button><span class='step-info'>${s + 1} of ${WIZARD_STEPS.length}</span>${nextBtn}</div></div></div></div>${STATE.modal ? renderModal() : ''}`; }
     // renderJoin replaced by Supabase version above
     function renderLobby() {
       const l = STATE.league;
@@ -7368,7 +7455,7 @@ async function assignCaptain(playerId, teamId) {
     function renderMainApp() { const l = STATE.league; if (!l) { STATE.screen = 'landing'; return renderLanding(); } const isDraftLive = l?.draftState?.status === 'active'; const isPlayoffs = l.status === 'playoffs' || l.status === 'complete';
       const tabs = l.status === 'lobby'
         ? [{k:'home',lb:'Home'},{k:'commissioner',lb:'⚙️ Edit League'}]
-        : [{k:'home',lb:'Home'},{k:'standings',lb:'Standings'},{k:'schedule',lb:'Schedule'},{k:'rosters',lb:'Rosters'},...(isPlayoffs ? [{k:'playoffs',lb:'🏆 Playoffs',cls:'live'}] : l.status === 'season' ? [] : [{k:'draft',lb:isDraftLive?'🟢 Draft Room':'Draft Room',cls:isDraftLive?'live':''}]),{k:'commissioner',lb:'Commissioner'}]; const nav = `<div class='nav'><div style='display:flex;align-items:center;gap:0;flex:1;overflow:hidden'><div style='display:flex;align-items:center;flex-shrink:0;cursor:pointer' onclick="STATE.screen='landing';R()"><span class='logo-mark'>RYL</span></div><span style='color:rgba(255,255,255,.18);font-size:13px;margin:0 7px'>/</span><div class='league-switcher-root' style='position:relative;margin-right:8px'>
+        : [{k:'home',lb:'Home'},{k:'standings',lb:'Standings'},{k:'schedule',lb:'Schedule'},{k:'rosters',lb:'Rosters'},...(isPlayoffs ? [{k:'playoffs',lb:'🏆 Playoffs',cls:'live'}] : l.status === 'season' ? [] : [{k:'draft',lb:isDraftLive?'🟢 Draft Room':'Draft Room',cls:isDraftLive?'live':''}]),{k:'commissioner',lb:'Commissioner'}]; const nav = `<div class='nav'><div style='display:flex;align-items:center;gap:0;flex:1;overflow:hidden'><div style='display:flex;align-items:center;flex-shrink:0;cursor:pointer' onclick='goHome()'><span class='logo-mark'>RYL</span></div><span style='color:rgba(255,255,255,.18);font-size:13px;margin:0 7px'>/</span><div class='league-switcher-root' style='position:relative;margin-right:8px'>
         <button onclick="STATE.showLeagueSwitcher=!STATE.showLeagueSwitcher;R()" style='display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:4px 10px;cursor:pointer;max-width:130px'>
           <span style='font-size:11px;font-weight:700;color:rgba(255,255,255,.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px'>${l.name||'My League'}</span>
           <span style='color:rgba(255,255,255,.4);font-size:10px;flex-shrink:0'>${STATE.showLeagueSwitcher?'▲':'▼'}</span>
@@ -7440,7 +7527,7 @@ async function assignCaptain(playerId, teamId) {
           if (STATE.appTab === 'rosters') return playerNav + renderRosters() + playerModal;
           return playerNav + renderMemberSeasonHome() + playerModal;
         }
-      } if (STATE.screen === 'landing') return renderLanding(); if (STATE.screen === 'wizard') return renderWizard(); if (STATE.screen === 'join') return renderJoin(); if (STATE.screen === 'app') return renderMainApp(); return renderLanding(); }
+      } if (STATE.screen === 'myleagues') return renderMyLeagues(); if (STATE.screen === 'landing') return renderLanding(); if (STATE.screen === 'wizard') return renderWizard(); if (STATE.screen === 'join') return renderJoin(); if (STATE.screen === 'app') return renderMainApp(); return renderMyLeagues(); }
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && STATE.activeLeagueId && STATE.user && STATE.screen !== 'wizard') {
         _saving = false;
