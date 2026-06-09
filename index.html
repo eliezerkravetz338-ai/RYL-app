@@ -7428,11 +7428,22 @@ async function assignCaptain(playerId, teamId) {
         document.getElementById('app').innerHTML = renderApp();
         saveState();
       } catch (err) {
-        console.error('RYL render error:', err);
-        clearSavedState();
-        STATE.screen = 'landing';
-        STATE.league = null;
-        document.getElementById('app').innerHTML = renderLanding();
+        console.error('RYL render error:', err.message, err.stack);
+        if (STATE.screen === 'wizard') {
+          // Don't wipe state during wizard — show the error instead
+          document.getElementById('app').innerHTML = `<div style='padding:40px 20px;max-width:500px;margin:0 auto'>
+            <div style='background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:20px'>
+              <div style='font-size:16px;font-weight:800;color:#dc2626;margin-bottom:8px'>Wizard error — step ${STATE.wizStep}</div>
+              <div style='font-size:13px;color:#7f1d1d;font-family:monospace'>${err.message}</div>
+              <button onclick="STATE.wizStep=0;STATE.screen='wizard';R()" style='margin-top:14px;padding:8px 16px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700'>← Back to Step 1</button>
+            </div>
+          </div>`;
+        } else {
+          clearSavedState();
+          STATE.screen = 'landing';
+          STATE.league = null;
+          document.getElementById('app').innerHTML = renderLanding();
+        }
       }
     }
 
