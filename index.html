@@ -3543,6 +3543,38 @@
 
         </div>`;
     }
+    function cleanInitials(name) {
+      const fallback = String(name || 'Team').trim();
+      const parts = fallback.split(/\s+/).filter(Boolean);
+      if (!parts.length) return 'T';
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    function smartTeamIdentity(teamOrName, fallbackColor = '#64748b') {
+      const name = typeof teamOrName === 'string' ? teamOrName : (teamOrName?.name || '');
+      const color = typeof teamOrName === 'string' ? fallbackColor : (teamOrName?.color || fallbackColor);
+      const key = String(name || '').toLowerCase();
+      const presets = [
+        { keys: ['storm','thunder','lightning'], mark: '⚡', gradient: 'linear-gradient(135deg,#1d4ed8,#38bdf8)' },
+        { keys: ['fire','flame','heat','blaze'], mark: '🔥', gradient: 'linear-gradient(135deg,#991b1b,#f97316)' },
+        { keys: ['ice','freeze','frost'], mark: '❄', gradient: 'linear-gradient(135deg,#0369a1,#67e8f9)' },
+        { keys: ['hawks','eagles','falcons'], mark: 'H', gradient: 'linear-gradient(135deg,#991b1b,#ef4444)' },
+        { keys: ['kings','royals','crown'], mark: 'K', gradient: 'linear-gradient(135deg,#713f12,#facc15)' },
+        { keys: ['wolves','wolfpack'], mark: 'W', gradient: 'linear-gradient(135deg,#1f2937,#94a3b8)' },
+        { keys: ['titans','giants'], mark: 'T', gradient: 'linear-gradient(135deg,#0f766e,#14b8a6)' },
+        { keys: ['lions'], mark: 'L', gradient: 'linear-gradient(135deg,#7c2d12,#fb923c)' },
+        { keys: ['bulls'], mark: 'B', gradient: 'linear-gradient(135deg,#7f1d1d,#f43f5e)' },
+        { keys: ['machine'], mark: 'GM', gradient: 'linear-gradient(135deg,#166534,#22c55e)' }
+      ];
+      const match = presets.find(p => p.keys.some(k => key.includes(k)));
+      if (match) return match;
+      return { mark: cleanInitials(name), gradient: `linear-gradient(135deg, ${color}, #111827)` };
+    }
+    function teamAvatar(team, cls = '', style = '') {
+      const identity = smartTeamIdentity(team, team?.color || '#64748b');
+      return `<div class='${cls}' style='background:${identity.gradient};color:#fff;${style}'>${identity.mark}</div>`;
+    }
+
     function wizS0() {
       const l = STATE.league;
       return `
