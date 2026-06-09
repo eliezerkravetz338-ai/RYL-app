@@ -1765,8 +1765,8 @@
         else STATE.leagues.push(leagueCopy);
       }
 
-      // If logged in, persist to Supabase
-      if (STATE.user && STATE.activeLeagueId && STATE.league) {
+      // If logged in, persist to Supabase (skip during wizard setup)
+      if (STATE.user && STATE.activeLeagueId && STATE.league && STATE.screen !== 'wizard') {
         if (_saving) return;
         _saving = true;
         const saveId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -3066,8 +3066,8 @@
     }
     function beginSeasonTransition() { if (!STATE.league) return; clearTimeout(STATE.transitionTimeout); ensureLockedGameOfDay(STATE.league, STATE.league.currentDayGameNum || 1); STATE.league = { ...STATE.league, transitionMode: 'season', status: 'season', seasonEntered: true }; STATE.appTab = 'home'; STATE.draftPreviewMode = false; R(); }
     function startDraftNow() { const l = STATE.league; const order = l.draftOrder?.length === l.teams.length ? l.draftOrder : l.teams.map(t => t.id); const captainCount = l.teams.filter(t => t.captainId).length; STATE.league = { ...l, status: 'draft', draftState: { status: 'active', idx: 0, order, picks: [], total: l.teams.length * l.ppt - captainCount, secs: l.timerSecs, queue: [] } }; STATE.appTab = 'draft'; R(); startTimer(); }
-    function wizNext() { const l = STATE.league; if (STATE.wizStep === 0 && !l.name?.trim()) { alert('Please enter a league name'); return; } STATE.wizStep++; R(); }
-    function prevWiz() { STATE.wizStep--; R(); }
+    function wizNext() { const l = STATE.league; if (STATE.wizStep === 0 && !l.name?.trim()) { alert('Please enter a league name'); return; } STATE.wizStep++; STATE.screen = 'wizard'; R(); }
+    function prevWiz() { STATE.wizStep--; STATE.screen = 'wizard'; R(); }
 
     // ── PLAYER WAITING SCREEN ──────────────────────────────────────
     function renderWaiting() {
@@ -7410,7 +7410,7 @@ async function assignCaptain(playerId, teamId) {
         }
       } if (STATE.screen === 'landing') return renderLanding(); if (STATE.screen === 'wizard') return renderWizard(); if (STATE.screen === 'join') return renderJoin(); if (STATE.screen === 'app') return renderMainApp(); return renderLanding(); }
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && STATE.activeLeagueId && STATE.user) {
+      if (document.visibilityState === 'visible' && STATE.activeLeagueId && STATE.user && STATE.screen !== 'wizard') {
         _saving = false;
         refreshLeagueFromDB();
       }
