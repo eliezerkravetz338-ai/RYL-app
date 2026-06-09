@@ -1661,6 +1661,7 @@
   <div id="app"></div>
   <script>
     const PAL = ['#16a34a','#2563eb','#dc2626','#d97706','#7c3aed','#0891b2','#be185d','#065f46','#b45309','#1d4ed8','#9333ea','#c2410c'];
+    const TEAM_NAMES = ['Ballers','Hoops','Squad','Handles','Buckets','Swish','Dunkers','Dribblers','Fadeaway','Crossover','Baseline','Fastbreak','Clutch','Grinders','Showtime'];
     const DEMO_PLAYERS = ["Alex Johnson","Ben Williams","Carlos Rivera","David Kim","Ethan Brown","Frank Davis","George Wilson","Henry Martinez","Isaac Taylor","Jake Anderson","Kevin Thomas","Liam Jackson","Marcus White","Nathan Harris","Owen Clark","Patrick Lewis","Quinn Robinson","Ryan Walker","Sam Hall","Tyler Young","Uriah King","Victor Scott","Will Green","Xavier Baker","Yusuf Ahmad","Zach Stern","Aaron Gold","Blake Stone","Cole Davis","Derek Park","Eli Cohen","Felix Nguyen","Gabe Torres","Hugo Reyes","Ivan Petrov","Jordan Lee","Kyle Chen","Lance Webb","Mike Osei","Neil Patel","Oscar Hunt","Paul Kim","Rami Haddad","Sean Murphy","Teo Cruz","Uma Patel","Vic Ross","Will Hunt","Xander Bay","Yosef Klein"];
     const DEMO_TEAMS = [
       {name:"Thunder Hawks",cap:"Jake Cohen",color:"#16a34a"},
@@ -1671,7 +1672,7 @@
       {name:"Blue Knights",cap:"Zach Stern",color:"#0891b2"}
     ];
     const DEMO_COURTS = ["Main Court","Side Court","Gym A","Gym B"];
-    const WIZARD_STEPS = ['League Info','Teams','Draft Setup','Player Pool','Schedule','Review'];
+    const WIZARD_STEPS = ['Your League','Teams','Players','Draft','Schedule','Review'];
 
     // ── Supabase ──────────────────────────────────────────────────
     const SUPABASE_URL = 'https://rqkjqbhobblexghzxfhs.supabase.co';
@@ -3542,98 +3543,165 @@
 
         </div>`;
     }
-    function wizS0() { const l = STATE.league; return `<div class='wiz-title'>Create Your League</div><div class='wiz-sub'>Start with the basics — clean and simple.</div><div class='fg'><label class='fl'>League Name</label><input class='fi' placeholder='e.g. Nitzanim Basketball 2025' value='${l.name}' oninput="STATE.league.name=this.value"></div><div class='fg'><label class='fl'>Division / Group</label><input class='fi' placeholder='e.g. Nitzanim, Senior Division' value='${l.division}' oninput="STATE.league.division=this.value"></div><div class='fg'><label class='fl'>Sport</label><select class='fi'><option>Basketball 🏀</option></select></div>`; }
+    function wizS0() {
+      const l = STATE.league;
+      return `
+        <div class='wiz-title'>Name your league</div>
+        <div class='wiz-sub' style='margin-bottom:20px'>This is what everyone will see when they join.</div>
+        <div class='fg'>
+          <label class='fl'>League Name</label>
+          <input class='fi' placeholder='e.g. Camp Nitzanim Basketball 2025' value='${l.name}' oninput="STATE.league.name=this.value" style='font-size:16px;padding:14px'>
+        </div>`; }
 
-    function cleanInitials(name) {
-      const fallback = String(name || 'Team').trim();
-      const parts = fallback.split(/\s+/).filter(Boolean);
-      if (!parts.length) return 'T';
-      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    function smartTeamIdentity(teamOrName, fallbackColor = '#64748b') {
-      const name = typeof teamOrName === 'string' ? teamOrName : (teamOrName?.name || '');
-      const color = typeof teamOrName === 'string' ? fallbackColor : (teamOrName?.color || fallbackColor);
-      const key = String(name || '').toLowerCase();
-      const presets = [
-        { keys: ['storm', 'thunder', 'lightning'], mark: '⚡', gradient: 'linear-gradient(135deg,#1d4ed8,#38bdf8)' },
-        { keys: ['fire', 'flame', 'heat', 'blaze'], mark: '🔥', gradient: 'linear-gradient(135deg,#991b1b,#f97316)' },
-        { keys: ['ice', 'freeze', 'frost'], mark: '❄', gradient: 'linear-gradient(135deg,#0369a1,#67e8f9)' },
-        { keys: ['hawks', 'eagles', 'falcons'], mark: 'H', gradient: 'linear-gradient(135deg,#991b1b,#ef4444)' },
-        { keys: ['kings', 'royals', 'crown'], mark: 'K', gradient: 'linear-gradient(135deg,#713f12,#facc15)' },
-        { keys: ['wolves', 'wolfpack'], mark: 'W', gradient: 'linear-gradient(135deg,#1f2937,#94a3b8)' },
-        { keys: ['titans', 'giants'], mark: 'T', gradient: 'linear-gradient(135deg,#0f766e,#14b8a6)' },
-        { keys: ['lions'], mark: 'L', gradient: 'linear-gradient(135deg,#7c2d12,#fb923c)' },
-        { keys: ['bulls'], mark: 'B', gradient: 'linear-gradient(135deg,#7f1d1d,#f43f5e)' },
-        { keys: ['machine'], mark: 'GM', gradient: 'linear-gradient(135deg,#166534,#22c55e)' }
-      ];
-      const match = presets.find(p => p.keys.some(k => key.includes(k)));
-      if (match) return match;
-      return { mark: cleanInitials(name), gradient: `linear-gradient(135deg, ${color}, #111827)` };
-    }
-    function teamAvatar(team, cls = '', style = '') {
-      const identity = smartTeamIdentity(team, team?.color || '#64748b');
-      return `<div class='${cls}' style='background:${identity.gradient};color:#fff;${style}'>${identity.mark}</div>`;
-    }
-    function wizS1() { const l = STATE.league; while (l.teams.length < l.numTeams) l.teams.push({ id: uid(), name: '', cap: '', color: PAL[l.teams.length % PAL.length] }); l.teams = l.teams.slice(0, l.numTeams); return `<div class='wiz-title'>Teams</div><div class='wiz-sub'>Create your teams. Captains will claim them later.</div><div class='fr2'><div class='fg'><label class='fl'>Number of Teams</label><input class='fi' type='number' min='2' max='16' value='${l.numTeams}' oninput="STATE.league.numTeams=+this.value;STATE.league.teams=[];R()"></div><div class='fg'><label class='fl'>Players Per Team</label><input class='fi' type='number' min='4' max='20' value='${l.ppt}' oninput="STATE.league.ppt=+this.value"></div></div><div class='tgrid'>${l.teams.map((t, i) => `<div class='tslot'><div style='display:flex;align-items:center;gap:8px;margin-bottom:8px'>${teamAvatar(t, '', 'width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800')}<strong>Team ${i + 1}</strong></div><div class='fg'><input class='fi' placeholder='Team Name' value='${t.name}' oninput="STATE.league.teams[${i}].name=this.value"></div><div class='fg'><input class='fi' placeholder='Captain (optional)' value='${t.cap}' oninput="STATE.league.teams[${i}].cap=this.value"></div><div class='sw-row'>${PAL.map(c => `<div class='sw ${t.color===c?'sel':''}' style='background:${c}' onclick="STATE.league.teams[${i}].color='${c}';R()"></div>`).join('')}</div></div>`).join('')}</div>`; }
-    function wizS2() { const l = STATE.league; if (!l.draftOrder?.length) l.draftOrder = l.teams.map(t => t.id); const quickTimes = [30, 60, 90, 120]; return `<div class='wiz-title'>Draft Setup</div><div class='wiz-sub'>Set the timer and lock in a clean draft order.</div><div class='fg'><label class='fl'>Draft Timer</label><div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px'>${quickTimes.map(sec => `<button class='btn ${l.timerSecs===sec?'btn-p':'btn-o'} btn-sm' onclick='STATE.league.timerSecs=${sec};R()'>${sec}s</button>`).join('')}</div></div><div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px'><button class='btn btn-o btn-sm' onclick="STATE.league.draftOrder.sort(()=>Math.random()-.5);R()">🔀 Randomize Order</button><button class='btn btn-o btn-sm' onclick="STATE.league.draftOrder=STATE.league.teams.map(t=>t.id);R()">↺ Reset to Team Order</button></div><div class='al al-g' style='margin-bottom:12px'>Pick order should be easy: just choose the number you want for each team.</div>${l.draftOrder.map((tid, i) => { const t = l.teams.find(x => x.id === tid) || { name: `Team ${i+1}`, color: PAL[i % PAL.length], cap: '' }; return `<div style='display:flex;align-items:center;background:#fff;border:1.5px solid var(--b1);border-radius:var(--r);overflow:hidden;margin-bottom:8px;box-shadow:var(--sh);padding-right:10px'><div style='width:6px;align-self:stretch;background:${t.color}'></div><div style='display:flex;align-items:center;gap:10px;flex:1;padding:12px'>${teamAvatar(t, '', 'width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800')}<div style='flex:1'><div style='font-size:13px;font-weight:700;color:var(--t1)'>${t.name || `Team ${i+1}`} ${i===0?`<span class='badge bg-green'>1st Pick</span>`:''}</div><div style='font-size:11px;color:var(--t3);margin-top:1px'>${t.cap || 'Captain joins later'}</div></div><div style='min-width:88px'><label class='fl' style='margin-bottom:3px'>Pick Slot</label><select class='fi' onchange="setDraftPosition('${t.id}', +this.value - 1)">${l.teams.map((_, idx) => `<option value='${idx+1}' ${i===idx?'selected':''}>${idx+1}</option>`).join('')}</select></div></div></div>`; }).join('')}`; }
-    function wizS3() { const l = STATE.league; return `<div class='wiz-title'>Player Pool</div><div class='wiz-sub'>Paste all player names — one per line. These become the draft pool.</div><div class='fr2'><div class='card'><div class='chd'><h3>Paste Names</h3></div><div class='cbd'><textarea class='fi' id='plImport' placeholder='Alex Johnson&#10;Ben Williams&#10;...'></textarea><div style='display:flex;gap:8px;margin-top:8px'><button class='btn btn-p btn-sm' onclick='importPl()'>Add to Pool</button></div></div></div><div class='card'><div class='chd'><h3>Player Pool</h3><span class='badge bg-gray'>${l.players.length}</span></div><div class='cbd'>${l.players.length ? l.players.map((p, i) => `<div class='tr-row'><span class='tr-pl'>${p.name}</span><button class='btn btn-red btn-xs' onclick="STATE.league.players.splice(${i},1);R()">Remove</button></div>`).join('') : `<div class='empty-s'><h3>No players yet</h3><p>Add players or load the demo list.</p></div>`}</div></div></div>`; }
+    function wizS1() {
+      const l = STATE.league;
+      while (l.teams.length < l.numTeams) {
+        const idx = l.teams.length;
+        l.teams.push({ id: uid(), name: TEAM_NAMES[idx % TEAM_NAMES.length], cap: '', color: PAL[idx % PAL.length] });
+      }
+      l.teams = l.teams.slice(0, l.numTeams);
+      return `
+        <div class='wiz-title'>Set up your teams</div>
+        <div class='wiz-sub' style='margin-bottom:20px'>Names and colors are auto-filled — change anything you like.</div>
+        <div class='fg' style='max-width:200px;margin-bottom:20px'>
+          <label class='fl'>Number of Teams</label>
+          <input class='fi' type='number' min='2' max='16' value='${l.numTeams}' oninput="STATE.league.numTeams=+this.value;STATE.league.teams=[];R()">
+        </div>
+        <div class='tgrid'>
+          ${l.teams.map((t, i) => `
+            <div class='tslot'>
+              <div style='display:flex;align-items:center;gap:8px;margin-bottom:10px'>
+                ${teamAvatar(t, '', 'width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800')}
+                <span style='font-size:13px;font-weight:700;color:var(--t3)'>Team ${i+1}</span>
+              </div>
+              <div class='fg'>
+                <input class='fi' placeholder='Team Name' value='${t.name}' oninput="STATE.league.teams[${i}].name=this.value">
+              </div>
+              <div class='sw-row'>
+                ${PAL.map(c => `<div class='sw ${t.color===c?'sel':''}' style='background:${c}' onclick="STATE.league.teams[${i}].color='${c}';R()"></div>`).join('')}
+              </div>
+            </div>`).join('')}
+        </div>`; }
+
+    function wizS2() {
+      const l = STATE.league;
+      const pool = l.players.filter(p => !p.isCaptain);
+      return `
+        <div class='wiz-title'>Add your players</div>
+        <div class='wiz-sub' style='margin-bottom:8px'>Add players who don't have a phone or can't join on their own.</div>
+        <div style='background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;margin-bottom:20px;font-size:13px;color:#92400e;line-height:1.5'>
+          💡 Players with a phone should join using the league code after you launch — they don't need to be added here.
+        </div>
+        <div class='fg'>
+          <label class='fl'>Paste names — one per line</label>
+          <textarea class='fi' id='plImport' placeholder='Alex Johnson&#10;Ben Williams&#10;Chris Davis&#10;...' style='min-height:140px;font-size:14px'></textarea>
+          <button class='btn btn-p btn-sm' style='margin-top:8px' onclick='importPl()'>Add to Pool</button>
+        </div>
+        ${pool.length ? `
+          <div style='margin-top:16px'>
+            <div style='font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px'>${pool.length} player${pool.length !== 1 ? 's' : ''} added</div>
+            <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;overflow:hidden;max-height:220px;overflow-y:auto'>
+              ${pool.map((p, i) => `
+                <div style='display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--b1)'>
+                  <div style='font-size:13px;color:var(--t3);width:22px;text-align:right'>${i+1}</div>
+                  <div style='flex:1;font-size:14px;font-weight:600;color:var(--t1)'>${p.name}</div>
+                  <button onclick="STATE.league.players.splice(${l.players.indexOf(p)},1);R()" style='background:none;border:none;color:var(--t3);cursor:pointer;font-size:18px;line-height:1;padding:0 4px'>×</button>
+                </div>`).join('')}
+            </div>
+          </div>` : `
+          <div style='margin-top:12px;padding:16px;background:var(--f4);border-radius:12px;border:1px dashed var(--b1);text-align:center'>
+            <div style='font-size:13px;color:var(--t3)'>No players added yet — that is OK. You can add more any time after launch too.</div>
+          </div>`}`; }
+
+    function wizS3() {
+      const l = STATE.league;
+      if (!l.draftOrder?.length) l.draftOrder = l.teams.map(t => t.id);
+      const quickTimes = [30, 60, 90, 120];
+      return `
+        <div class='wiz-title'>Draft settings</div>
+        <div class='wiz-sub' style='margin-bottom:20px'>How long does each captain have to make their pick?</div>
+        <div class='fg' style='margin-bottom:24px'>
+          <label class='fl'>Seconds per pick</label>
+          <div style='display:flex;gap:8px;flex-wrap:wrap'>
+            ${quickTimes.map(sec => `<button class='btn ${l.timerSecs===sec?'btn-p':'btn-o'} btn-sm' onclick='STATE.league.timerSecs=${sec};R()'>${sec}s</button>`).join('')}
+          </div>
+        </div>
+        <div class='fg'>
+          <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px'>
+            <label class='fl' style='margin:0'>Draft Order</label>
+            <div style='display:flex;gap:6px'>
+              <button class='btn btn-p btn-sm' onclick="STATE.league.draftOrder=[...STATE.league.draftOrder].sort(()=>Math.random()-.5);R()">&#x1F500; Randomize</button>
+              <button class='btn btn-o btn-sm' onclick="STATE.league.draftOrder=STATE.league.teams.map(t=>t.id);R()">&#x21BA; Reset</button>
+            </div>
+          </div>
+          ${l.draftOrder.map((tid, i) => {
+            const t = l.teams.find(x => x.id === tid) || { name: `Team ${i+1}`, color: PAL[i % PAL.length] };
+            return `<div style='display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--b1);border-radius:10px;padding:10px 14px;margin-bottom:6px'>
+              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:20px;color:var(--t3);width:24px;text-align:center'>${i+1}</div>
+              <div style='width:28px;height:28px;border-radius:50%;background:${t.color};flex-shrink:0'></div>
+              <div style='flex:1;font-size:14px;font-weight:700;color:var(--t1)'>${t.name}</div>
+              <div style='display:flex;gap:4px'>
+                ${i > 0 ? `<button onclick="const o=STATE.league.draftOrder;[o[${i}],o[${i-1}]]=[o[${i-1}],o[${i}]];R()" style='width:32px;height:32px;border-radius:8px;background:var(--f4);border:1px solid var(--b1);cursor:pointer;font-size:14px'>&#x2191;</button>` : '<div style="width:32px"></div>'}
+                ${i < l.draftOrder.length-1 ? `<button onclick="const o=STATE.league.draftOrder;[o[${i}],o[${i+1}]]=[o[${i+1}],o[${i}]];R()" style='width:32px;height:32px;border-radius:8px;background:var(--f4);border:1px solid var(--b1);cursor:pointer;font-size:14px'>&#x2193;</button>` : '<div style="width:32px"></div>'}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`; }
+
     function wizS4() {
       const l = STATE.league;
       if (!l.courts.filter(Boolean).length) l.courts = ['Main Court'];
-      if (!l.gameDays.length) l.gameDays = [{ num: 1, time: '2:00 PM', courts: l.courts.filter(Boolean) }];
-      l.gameDays.forEach((gd, i) => {
-        gd.num = i + 1;
-        gd.courts = (gd.courts || []).filter(c => l.courts.includes(c));
-        if (!gd.courts.length) gd.courts = [...l.courts.filter(Boolean)];
-      });
+      if (!l.gameDays.length) l.gameDays = [{ num: 1, time: '4:00 PM', courts: l.courts.filter(Boolean) }];
+      const numDays = l.gameDays.length;
       const cleanCourts = l.courts.filter(Boolean);
-      return `<div class='wiz-title'>Schedule Setup</div>
-        <div class='wiz-sub'>Keep it flexible, but make the setup fast. Set the league courts once, then choose the time and courts for each game day.</div>
-        <div class='sched-fast'>
-          <div class='sched-fast-title'>Fast Schedule Controls</div>
-          <div class='sched-fast-sub'>Use Game #1 as your template when the league has the same setup each day. You can still edit any game day individually.</div>
-          <div class='sched-fast-actions'>
-            <button class='btn btn-p btn-sm' onclick="syncGameTimesFromFirst(to24(STATE.league.gameDays[0]?.time||'2:00 PM'))">Apply Game #1 time to all</button>
-            <button class='btn btn-o btn-sm' onclick='applyGameOneCourtsToAll()'>Apply Game #1 courts to all</button>
-            <button class='btn btn-o btn-sm' onclick='addScheduleGameDay()'>+ Add Game Day</button>
-            <button class='btn btn-o btn-sm' onclick="autoSpaceGameDayTimes(to24(STATE.league.gameDays[0]?.time||'2:00 PM'), 90)">Auto-space times</button>
+      return `
+        <div class='wiz-title'>Schedule</div>
+        <div class='wiz-sub' style='margin-bottom:20px'>Set your courts and how many game days you are planning. You will set exact times in the app when each day starts.</div>
+        <div class='fg' style='margin-bottom:24px'>
+          <label class='fl'>Courts available</label>
+          ${l.courts.map((c, i) => `
+            <div style='display:flex;gap:8px;align-items:center;margin-bottom:8px'>
+              <input class='fi' style='flex:1' placeholder='e.g. Main Gym, Court 1' value='${c}' onblur="STATE.league.courts[${i}]=this.value;R()" onkeydown="if(event.key==='Enter')this.blur()">
+              <button onclick="STATE.league.courts.splice(${i},1);R()" style='width:32px;height:32px;border-radius:8px;background:var(--f4);border:1px solid var(--b1);cursor:pointer;font-size:16px;color:var(--t3)' ${cleanCourts.length <= 1 ? 'disabled' : ''}>×</button>
+            </div>`).join('')}
+          <button onclick="STATE.league.courts.push('');R()" class='btn btn-o btn-sm' style='margin-top:4px'>+ Add Court</button>
+        </div>
+        <div class='fg'>
+          <label class='fl'>Number of game days</label>
+          <div style='display:flex;align-items:center;gap:16px;margin-top:4px'>
+            <button onclick="if(STATE.league.gameDays.length>1){STATE.league.gameDays.pop();STATE.league.gameDays.forEach((g,i)=>g.num=i+1);R()}" style='width:40px;height:40px;border-radius:10px;background:var(--f4);border:1.5px solid var(--b1);font-size:22px;cursor:pointer;color:var(--t1)'>&#x2212;</button>
+            <span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:42px;color:var(--t1);min-width:50px;text-align:center'>${numDays}</span>
+            <button onclick="STATE.league.gameDays.push({num:STATE.league.gameDays.length+1,time:'4:00 PM',courts:[...STATE.league.courts.filter(Boolean)]});R()" style='width:40px;height:40px;border-radius:10px;background:var(--f4);border:1.5px solid var(--b1);font-size:22px;cursor:pointer;color:var(--t1)'>+</button>
+          </div>
+          <div style='font-size:12px;color:var(--t3);margin-top:10px'>Game times are set in the app when each day starts — no need to set them now.</div>
+        </div>`; }
+
+    function wizS5() {
+      const l = STATE.league;
+      const stats = [['Teams', l.numTeams], ['Players', l.players.length], ['Timer', l.timerSecs + 's'], ['Games', l.gameDays.length], ['Courts', l.courts.filter(Boolean).length]];
+      return `
+        <div class='wiz-title'>Review &amp; Launch &#x1F680;</div>
+        <div class='wiz-sub' style='margin-bottom:20px'>Everything look right? You can still edit everything after launch.</div>
+        <div style='background:var(--n2);border-radius:16px;padding:20px;margin-bottom:16px'>
+          <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:28px;color:#fff;margin-bottom:6px'>${l.name || '(no name)'}</div>
+          <div style='font-size:12px;color:rgba(255,255,255,.35);margin-bottom:14px'>Basketball · Snake Draft · ${l.timerSecs}s/pick</div>
+          <div style='display:flex;flex-wrap:wrap;gap:6px'>
+            ${l.teams.map(t => `<div style='display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:4px 10px'>
+              <div style='width:8px;height:8px;border-radius:50%;background:${t.color}'></div>
+              <span style='font-size:12px;font-weight:600;color:rgba(255,255,255,.8)'>${t.name||'(unnamed)'}</span>
+            </div>`).join('')}
           </div>
         </div>
-        <div class='sched-mini-grid'>
-          <div class='card'>
-            <div class='chd'><h3>League Courts</h3><button class='btn btn-o btn-xs' onclick='addScheduleCourt()'>+ Court</button></div>
-            <div class='cbd'>
-              ${l.courts.map((c, i) => `<div style='display:flex;gap:7px;align-items:center;margin-bottom:7px'>
-                <input class='fi' style='flex:1' value='${c}' onblur="renameScheduleCourt(${i}, this.value)" onkeydown="if(event.key==='Enter') this.blur()">
-                <button class='btn btn-red btn-xs' onclick='removeScheduleCourt(${i})' ${cleanCourts.length <= 1 ? 'disabled' : ''}>✕</button>
-              </div>`).join('')}
-              <div class='sched-help'>Courts entered here become the available options for every game day.</div>
-              <button class='btn btn-o btn-sm' onclick="STATE.league.courts=[...DEMO_COURTS];STATE.league.gameDays.forEach(g=>g.courts=[...DEMO_COURTS]);R()">Reset to Default Courts</button>
-            </div>
-          </div>
-          <div class='card'>
-            <div class='chd'><h3>Game Days</h3><span class='badge bg-gray'>${l.gameDays.length}</span></div>
-            <div class='cbd'>
-              <div class='sched-day-grid'>
-                ${l.gameDays.map((gd, i) => `<div class='sched-day-card'>
-                  <div class='sched-day-head'>
-                    <div><div class='sched-day-title'>Game #${gd.num}</div><div class='sched-day-sub'>${(gd.courts||[]).length} court${(gd.courts||[]).length === 1 ? '' : 's'} selected</div></div>
-                    <div style='display:flex;gap:6px;align-items:center'><button class='btn btn-o btn-xs' onclick='duplicateScheduleGameDay(${i})'>Duplicate</button><button class='btn btn-red btn-xs' onclick='removeScheduleGameDay(${i})' ${l.gameDays.length <= 1 ? 'disabled' : ''}>Remove</button></div>
-                  </div>
-                  <div class='sched-day-body'>
-                    <div class='fg'><label class='fl'>Start Time</label><input class='fi' type='time' step='300' value='${to24(gd.time)}' onchange='setSingleGameTime(${i}, this.value)'></div>
-                    <div class='fg' style='margin-bottom:0'><label class='fl'>Courts In Use</label>
-                      <div class='sched-court-list'>${cleanCourts.length ? cleanCourts.map(court => `<label class='sched-court-chip ${(gd.courts||[]).includes(court)?'on':''}'><input type='checkbox' ${(gd.courts||[]).includes(court)?'checked':''} onchange="toggleCourtForGame(${i}, '${court.replace(/'/g, "\\'")}')">${court}</label>`).join('') : `<span style='font-size:12px;color:var(--t3)'>Add courts first.</span>`}</div>
-                    </div>
-                  </div>
-                </div>`).join('')}
-              </div>
-            </div>
-          </div>
-        </div>`;
-    }
-    function wizS5() { const l = STATE.league; const stats = [['Teams', l.numTeams], ['Per Team', l.ppt], ['Players', l.players.length], ['Timer', l.timerSecs + 's'], ['Games', l.gameDays.length], ['Courts', l.courts.filter(Boolean).length]]; return `<div class='wiz-title'>Review & Launch 🚀</div><div class='wiz-sub'>Everything look right? Hit Launch to go live.</div><div style='background:var(--n2);border-radius:13px;padding:16px;margin-bottom:14px'><div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:#fff;margin-bottom:3px'>${l.name || '(no name)'}</div><div style='font-size:11px;color:rgba(255,255,255,.35)'>${l.division || 'No division'} · Basketball · Snake Draft · ${l.timerSecs}s/pick</div><div style='display:flex;flex-wrap:wrap;gap:5px;margin-top:11px'>${l.teams.map(t => `<div style='display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:3px 9px'><div style='width:6px;height:6px;border-radius:50%;background:${t.color}'></div><span style='font-size:11px;font-weight:600;color:rgba(255,255,255,.75)'>${t.name || '(unnamed)'}</span></div>`).join('')}</div></div><div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:7px;margin-bottom:14px'>${stats.map(([k,v]) => `<div style='background:var(--f4);border:1px solid var(--b1);border-radius:var(--r);padding:9px;text-align:center'><div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:20px;color:var(--g);line-height:1'>${v}</div><div style='font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.7px;margin-top:2px'>${k}</div></div>`).join('')}</div><div class='al al-g'>League code will be generated automatically. You can still edit teams, courts, scores, and settings after launch.</div>`; }
+        <div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:16px'>
+          ${stats.map(([k,v]) => `<div style='background:var(--f4);border:1px solid var(--b1);border-radius:12px;padding:12px;text-align:center'>
+            <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:var(--g);line-height:1'>${v}</div>
+            <div style='font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.7px;margin-top:3px'>${k}</div>
+          </div>`).join('')}
+        </div>
+        <div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;font-size:13px;color:#15803d'>
+          &#x2705; A league code will be generated automatically. Share it with your captains from the lobby.
+        </div>`; }
+
     function renderWizard() { const l = STATE.league; const s = STATE.wizStep; const pb = WIZARD_STEPS.map((name, i) => `<div style='display:flex;align-items:center;${i < WIZARD_STEPS.length - 1 ? 'flex:1' : ''}'><div class='pb-c ${i < s ? 'done' : i === s ? 'act' : 'pend'}'>${i < s ? '✓' : i + 1}</div><span class='pb-lbl ${i === s ? 'act' : ''}'>${name}</span></div>${i < WIZARD_STEPS.length - 1 ? `<div class='pb-line ${i < s ? 'done' : ''}'></div>` : ''}`).join(''); let body = ''; if (s === 0) body = wizS0(); else if (s === 1) body = wizS1(); else if (s === 2) body = wizS2(); else if (s === 3) body = wizS3(); else if (s === 4) body = wizS4(); else body = wizS5(); const nextBtn = s < 5 ? `<button class='btn btn-p' onclick='wizNext()'>Continue →</button>` : `<button class='btn btn-p btn-lg' onclick='launchLeague(STATE.league)' ${!l.name ? 'disabled' : ''}>Launch League 🚀</button>`; return `<div class='nav'><div style='display:flex;align-items:center'><span class='logo-mark'>RYL</span><span class='logo-text'>Run Your League</span></div><button class='btn btn-d btn-sm' onclick="STATE.screen='landing';R()">← Home</button></div><div class='wiz-wrap'><div class='wiz-inner'><div class='pb'>${pb}</div><div class='wiz-card'>${body}<div class='wiz-foot'><button class='btn btn-gh btn-sm' onclick="${s === 0 ? `STATE.screen='landing';R()` : 'prevWiz()'}">${s === 0 ? '← Home' : '← Back'}</button><span class='step-info'>${s + 1} of ${WIZARD_STEPS.length}</span>${nextBtn}</div></div></div></div>${STATE.modal ? renderModal() : ''}`; }
     // renderJoin replaced by Supabase version above
     function renderLobby() {
