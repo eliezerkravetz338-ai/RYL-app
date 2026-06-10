@@ -3663,6 +3663,23 @@
       return `<div class='${cls}' style='background:${identity.gradient};color:#fff;${style}'>${identity.mark}</div>`;
     }
 
+    function wizSetCourt(i, val) {
+      STATE.league.courts[i] = val;
+      const clean = STATE.league.courts.filter(Boolean);
+      STATE.league.gameDays.forEach(gd => { gd.courts = [...clean]; });
+      R();
+    }
+    function wizRemoveCourt(i) {
+      STATE.league.courts.splice(i, 1);
+      const clean = STATE.league.courts.filter(Boolean);
+      STATE.league.gameDays.forEach(gd => { gd.courts = [...clean]; });
+      R();
+    }
+    function wizAddCourt() {
+      STATE.league.courts.push('');
+      R();
+    }
+
     function wizS0() {
       const l = STATE.league;
       return `
@@ -3772,8 +3789,10 @@
       const l = STATE.league;
       if (!l.courts.filter(Boolean).length) l.courts = ['Main Court'];
       if (!l.gameDays.length) l.gameDays = [{ num: 1, time: '4:00 PM', courts: l.courts.filter(Boolean) }];
-      const numDays = l.gameDays.length;
       const cleanCourts = l.courts.filter(Boolean);
+      // Always keep all game days in sync with current courts
+      l.gameDays.forEach(gd => { gd.courts = [...cleanCourts]; });
+      const numDays = l.gameDays.length;
       return `
         <div class='wiz-title'>Schedule</div>
         <div class='wiz-sub' style='margin-bottom:20px'>Set your courts and how many game days you are planning. You will set exact times in the app when each day starts.</div>
@@ -3781,10 +3800,10 @@
           <label class='fl'>Courts available</label>
           ${l.courts.map((c, i) => `
             <div style='display:flex;gap:8px;align-items:center;margin-bottom:8px'>
-              <input class='fi' style='flex:1' placeholder='e.g. Main Gym, Court 1' value='${c}' onblur="STATE.league.courts[${i}]=this.value;R()" onkeydown="if(event.key==='Enter')this.blur()">
-              <button onclick="STATE.league.courts.splice(${i},1);R()" style='width:32px;height:32px;border-radius:8px;background:var(--f4);border:1px solid var(--b1);cursor:pointer;font-size:16px;color:var(--t3)' ${cleanCourts.length <= 1 ? 'disabled' : ''}>×</button>
+              <input class='fi' style='flex:1' placeholder='e.g. Main Gym, Court 1' value='${c}' onblur="wizSetCourt(${i}, this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+              <button onclick="wizRemoveCourt(${i})" style='width:32px;height:32px;border-radius:8px;background:var(--f4);border:1px solid var(--b1);cursor:pointer;font-size:16px;color:var(--t3)' ${cleanCourts.length <= 1 ? 'disabled' : ''}>×</button>
             </div>`).join('')}
-          <button onclick="STATE.league.courts.push('');R()" class='btn btn-o btn-sm' style='margin-top:4px'>+ Add Court</button>
+          <button onclick="wizAddCourt()" class='btn btn-o btn-sm' style='margin-top:4px'>+ Add Court</button>
         </div>
         <div class='fg'>
           <label class='fl'>Number of game days</label>
