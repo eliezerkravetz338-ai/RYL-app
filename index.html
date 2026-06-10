@@ -5002,6 +5002,7 @@
         const t = l.teams.find(x => x.id === STATE.rosterFocus);
         if (!t) { STATE.rosterFocus = null; R(); return ''; }
         const ps = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
+        const rec = calcRec(t.id, l.games);
         const streak = getStreak(t.id, l.games);
         const hotStreak = streak.count >= 3 && streak.type === 'W';
         const coldStreak = streak.count >= 3 && streak.type === 'L';
