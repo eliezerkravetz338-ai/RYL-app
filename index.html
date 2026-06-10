@@ -1737,6 +1737,7 @@
       captainTab: 'team',              // captain home tab
       signupName: '',                // signup display name
       myQueue: [],                   // personal draft queue — local only, never synced
+      commTab: 'gameday',            // active commissioner tools tab
     };
 
     function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -6061,565 +6062,517 @@ async function assignCaptain(playerId, teamId) {
       </div>`;
     }
 
-    function renderComm() {
-          const l = STATE.league;
-          if (!l) return '';
-          const open = STATE.commOpen || {};
-    
-          // ── section toggle helper ──
-          function tog(key) {
-            return `STATE.commOpen={...STATE.commOpen||{},${key}:!((STATE.commOpen||{}).${key})};R()`;
-          }
-    
-          // ── section wrapper ──
-          function section(key, icon, title, badge, content, urgent) {
-            const isOpen = open[key];
-            const urgentDot = urgent ? `<span style='width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block;margin-left:4px;flex-shrink:0'></span>` : '';
-            return `<div style='border:1.5px solid ${urgent?"rgba(239,68,68,.3)":"var(--b1)"};border-radius:14px;overflow:hidden;margin-bottom:10px;background:#fff'>
-              <button onclick="${tog(key)}" style='width:100%;display:flex;align-items:center;gap:12px;padding:14px 16px;background:${isOpen?"var(--f4)":"#fff"};border:none;cursor:pointer;text-align:left'>
-                <span style='font-size:20px;flex-shrink:0'>${icon}</span>
-                <span style='font-size:14px;font-weight:700;color:var(--t1);flex:1'>${title}</span>
-                ${badge ? `<span style='font-size:11px;font-weight:700;color:var(--t3);background:var(--f4);border:1px solid var(--b1);padding:2px 8px;border-radius:999px'>${badge}</span>` : ''}
-                ${urgentDot}
-                <span style='color:var(--t3);font-size:14px;transition:transform .2s;transform:rotate(${isOpen?'90':'0'}deg)'>›</span>
-              </button>
-              ${isOpen ? `<div style='border-top:1px solid var(--b1)'>${content}</div>` : ''}
-            </div>`;
-          }
-    
-          const standings = getStandingsRows(l);
-          const totalGames = l.games.length;
-          const finalGamesCount = l.games.filter(g => g.status === 'final').length;
-          const pct = totalGames ? Math.round((finalGamesCount/totalGames)*100) : 0;
-          const currentDay = l.currentDayGameNum || 1;
-          const todayGames = l.games.filter(g => g.gameNum === currentDay);
-          const postponedGames = l.games.filter(g => g.status === 'postponed');
-          const needsScoring = todayGames.some(g => g.status !== 'final' && g.status !== 'postponed');
-          const sd = l.gameDays || [];
-    
-          // ── 1. TODAY'S GAMES ──
-          const todayRows = todayGames.map(g => {
+    function renderCommGameDay(l) {
+      const sd = l.gameDays || [];
+      const currentDay = l.currentDayGameNum || 1;
+      const todayGames = l.games.filter(g => g.gameNum === currentDay);
+      const postponedGames = l.games.filter(g => g.status === 'postponed');
+      const needsScoring = todayGames.some(g => g.status !== 'final' && g.status !== 'postponed');
+      const commSchedDay = STATE.commSchedDay || sd[0]?.num || 1;
+      const selDay = sd.find(d => d.num === commSchedDay);
+      const sdGames = l.games.filter(g => g.gameNum === commSchedDay);
+
+      function gameRow(g, showEdit) {
+        const home = l.teams.find(t => t.id === g.home);
+        const away = l.teams.find(t => t.id === g.away);
+        let badge = '', btns = '';
+        if (g.status === 'final') {
+          badge = `<span style='font-size:10px;font-weight:700;color:var(--gd);background:var(--gm);padding:2px 8px;border-radius:20px'>Final</span>`;
+          btns = `<button class='btn btn-o btn-xs' onclick='scoreGame("${g.id}")'>Edit</button>`;
+        } else if (g.status === 'live') {
+          badge = `<span style='font-size:10px;font-weight:700;color:var(--red);background:rgba(239,68,68,.08);padding:2px 8px;border-radius:20px'>🔴 Live</span>`;
+          btns = `<button class='btn btn-p btn-xs' onclick='scoreGame("${g.id}")'>Score</button>`;
+        } else if (g.status === 'postponed') {
+          badge = `<span style='font-size:10px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,.1);padding:2px 8px;border-radius:20px'>Postponed</span>`;
+          btns = `<button class='btn btn-o btn-xs' onclick='reinstateGame("${g.id}")'>Reinstate</button>`;
+        } else {
+          btns = `<button class='btn btn-p btn-xs' onclick='scoreGame("${g.id}")'>Score</button>
+            <button class='btn btn-o btn-xs' style='color:#f59e0b;border-color:#f59e0b' onclick='postponeGame("${g.id}")'>Postpone</button>
+            <button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='openForfeitModal("${g.id}")'>Forfeit</button>`;
+        }
+        const score = g.status === 'final' || g.status === 'live' ? `<span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:18px;color:${g.status==='live'?'var(--red)':'var(--t1)'}'>${g.hs??0}–${g.as??0}</span>` : '';
+        return `<div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:8px'>
+          <div style='display:flex;align-items:center;gap:10px;margin-bottom:8px'>
+            <div style='flex:1'>
+              <div style='font-size:14px;font-weight:700;color:var(--t1)'>${home?.name||'?'} <span style='color:var(--t3);font-weight:400'>vs</span> ${away?.name||'?'}</div>
+              <div style='font-size:11px;color:var(--t3);margin-top:2px'>${[g.time,g.court].filter(Boolean).join(' · ')||'No details'}</div>
+            </div>
+            ${score}${badge}
+          </div>
+          <div style='display:flex;gap:6px;flex-wrap:wrap'>${btns}</div>
+        </div>`;
+      }
+
+      // Day pills
+      const dayPills = sd.map(d => {
+        const dg = l.games.filter(g => g.gameNum === d.num);
+        const allFinal = dg.length > 0 && dg.every(g => g.status === 'final');
+        const hasLive = dg.some(g => g.status === 'live');
+        const isSel = commSchedDay === d.num;
+        const isCur = d.num === currentDay;
+        return `<button onclick='STATE.commSchedDay=${d.num};R()' style='position:relative;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;border:1.5px solid ${isSel?'var(--g)':allFinal?'rgba(22,163,74,.3)':hasLive?'rgba(239,68,68,.4)':'var(--b2)'};background:${isSel?'var(--gm)':allFinal?'rgba(22,163,74,.06)':'var(--f4)'};color:${isSel?'var(--gd)':allFinal?'var(--gd)':hasLive?'var(--red)':'var(--t2)'};cursor:pointer'>
+          ${isCur ? `<span style='position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;background:var(--g);border:2px solid #fff'></span>` : ''}
+          Day ${d.num}${allFinal?' ✓':''}
+        </button>`;
+      }).join('');
+
+      // Matchup rows for selected day
+      const matchupRows = sdGames.map(g => {
+        const home = l.teams.find(t => t.id === g.home);
+        const away = l.teams.find(t => t.id === g.away);
+        const canEdit = g.status !== 'final';
+        const teamSelects = canEdit
+          ? `<select style='flex:1;padding:6px 8px;border:1.5px solid var(--b2);border-radius:8px;font-size:13px;font-weight:700;color:var(--t1);background:#fff' onchange="swapMatchupTeam('${g.id}','home',this.value)">${l.teams.map(t=>`<option value='${t.id}' ${t.id===g.home?'selected':''}>${t.name}</option>`).join('')}</select>
+             <span style='font-size:11px;font-weight:700;color:var(--t3)'>vs</span>
+             <select style='flex:1;padding:6px 8px;border:1.5px solid var(--b2);border-radius:8px;font-size:13px;font-weight:700;color:var(--t1);background:#fff' onchange="swapMatchupTeam('${g.id}','away',this.value)">${l.teams.map(t=>`<option value='${t.id}' ${t.id===g.away?'selected':''}>${t.name}</option>`).join('')}</select>`
+          : `<span style='font-size:13px;font-weight:700;color:var(--t1)'>${home?.name||'?'} <span style='color:var(--t3);font-weight:400'>vs</span> ${away?.name||'?'}</span>`;
+        let statusActions = '';
+        if (g.status === 'postponed') {
+          statusActions = `<span style='font-size:10px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,.1);padding:2px 8px;border-radius:20px'>Postponed</span>
+            <button class='btn btn-o btn-xs' onclick='reinstateGame("${g.id}")'>Reinstate</button>`;
+        } else if (g.status === 'final') {
+          statusActions = `<span style='font-size:10px;font-weight:700;color:var(--gd)'>✓ ${g.hs}–${g.as}</span>
+            <button class='btn btn-o btn-xs' onclick='scoreGame("${g.id}")'>Edit</button>`;
+        } else {
+          statusActions = `<input type='time' value='${to24(g.time||selDay?.time||"14:00")}' onchange="updateGameTime('${g.id}',from24(this.value))" style='padding:4px 8px;border:1px solid var(--b1);border-radius:6px;font-size:11px;color:var(--t2);background:var(--f4);width:88px'>
+            <button class='btn btn-p btn-xs' onclick='scoreGame("${g.id}")'>Score</button>
+            <button class='btn btn-o btn-xs' style='color:#f59e0b;border-color:#f59e0b' onclick='postponeGame("${g.id}")'>Postpone</button>
+            <button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='openForfeitModal("${g.id}")'>Forfeit</button>`;
+        }
+        return `<div style='background:#fff;border-bottom:1px solid var(--b1);padding:12px 14px'>
+          <div style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px'>${teamSelects}</div>
+          <div style='display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px'>${statusActions}</div>
+          <div style='font-size:11px;color:var(--t3)'>${g.court||'No court assigned'}</div>
+        </div>`;
+      }).join('');
+
+      return `
+        <!-- TODAY -->
+        <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px'>
+          <div>
+            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Today</div>
+            <div style='font-size:18px;font-weight:800;color:var(--t1)'>Day ${currentDay} of ${sd.length}</div>
+          </div>
+          <div style='display:flex;gap:6px'>
+            <button class='btn btn-gh btn-sm' onclick='commissionerRewindDay()'>← Back</button>
+            <button class='btn btn-o btn-sm' onclick='commissionerAdvanceDay()'>Next →</button>
+          </div>
+        </div>
+
+        ${todayGames.length ? todayGames.map(g => gameRow(g)).join('') : `<div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:20px;text-align:center;color:var(--t3);margin-bottom:8px'>No games on Day ${currentDay}</div>`}
+
+        ${postponedGames.length ? `<div style='background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:14px;margin-bottom:8px'>
+          <div style='font-size:11px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px'>⏸ Postponed (${postponedGames.length})</div>
+          ${postponedGames.map(g => {
             const home = l.teams.find(t => t.id === g.home);
             const away = l.teams.find(t => t.id === g.away);
-            let actions = '';
-            if (g.status === 'final') {
-              actions = `<span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:16px;color:var(--t1)'>${g.hs}–${g.as}</span>
-                <span style='font-size:10px;font-weight:700;color:var(--gd);background:var(--gm);padding:2px 8px;border-radius:999px'>Final</span>
-                <button class='btn btn-o btn-xs' onclick='scoreGame("${g.id}")'>Edit</button>`;
-            } else if (g.status === 'live') {
-              actions = `<span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:16px;color:var(--red)'>${g.hs??0}–${g.as??0}</span>
-                <span style='font-size:10px;font-weight:700;color:var(--red);background:rgba(239,68,68,.08);padding:2px 8px;border-radius:999px'>🔴 Live</span>
-                <button class='btn btn-p btn-xs' onclick='scoreGame("${g.id}")'>Update</button>`;
-            } else if (g.status === 'postponed') {
-              actions = `<span style='font-size:10px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,.1);padding:2px 8px;border-radius:999px'>⏸ Postponed</span>
-                <button class='btn btn-o btn-xs' onclick='reinstateGame("${g.id}")'>Reinstate</button>`;
-            } else {
-              actions = `<button class='btn btn-p btn-xs' onclick='scoreGame("${g.id}")'>Score</button>
-                <button class='btn btn-o btn-xs' style='color:#f59e0b;border-color:#f59e0b' onclick='postponeGame("${g.id}")'>Postpone</button>
-                <button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='openForfeitModal("${g.id}")'>Forfeit</button>`;
-            }
-            return `<div style='display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--b1)'>
-              <div style='flex:1;min-width:0'>
-                <div style='font-size:13px;font-weight:700;color:var(--t1)'>${home?.name||'?'} <span style='color:var(--t3);font-weight:500'>vs</span> ${away?.name||'?'}</div>
-                <div style='font-size:10px;color:var(--t3);margin-top:2px'>${[g.court,g.time].filter(Boolean).join(' · ')||'No details set'}</div>
-              </div>
-              <div style='display:flex;align-items:center;gap:6px;flex-wrap:wrap'>${actions}</div>
-            </div>`;
-          }).join('');
-    
-          const postponedRows = postponedGames.map(g => {
-            const home = l.teams.find(t => t.id === g.home);
-            const away = l.teams.find(t => t.id === g.away);
-            const reschedLabel = g.rescheduledTo === 'tbd' ? ' <span style="color:#f59e0b;font-size:10px">(TBD)</span>'
-              : g.rescheduledTo ? ` <span style="color:var(--t3);font-size:10px">→ Day ${g.rescheduledTo}</span>` : '';
-            return `<div style='display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid rgba(245,158,11,.12)'>
-              <span style='font-size:12px;font-weight:600;color:var(--t2)'>${home?.name||'?'} vs ${away?.name||'?'}${reschedLabel}</span>
+            return `<div style='display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid rgba(245,158,11,.15)'>
+              <span style='font-size:13px;font-weight:600;color:var(--t2)'>${home?.name||'?'} vs ${away?.name||'?'}</span>
               <div style='display:flex;gap:5px'>
                 <button class='btn btn-o btn-xs' onclick='reinstateGame("${g.id}")'>Reinstate</button>
                 <button class='btn btn-o btn-xs' style='color:#f59e0b;border-color:#f59e0b' onclick='postponeGame("${g.id}")'>Reschedule</button>
               </div>
             </div>`;
-          }).join('');
-    
-          const todayContent = (todayGames.length || postponedGames.length)
-            ? todayRows + (postponedGames.length ? `<div style='background:rgba(245,158,11,.04);padding:8px 16px 4px'><div style='font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px'>⏸ Postponed (${postponedGames.length})</div>${postponedRows}</div>` : '')
-            : `<div style='padding:20px;text-align:center;color:var(--t3);font-size:13px'>No games scheduled for Day ${currentDay}</div>`;
-    
-          const todayBadge = needsScoring ? `${todayGames.filter(g=>g.status!=='final'&&g.status!=='postponed').length} need scoring` : `Day ${currentDay} · All done ✓`;
-    
-          // ── 2. SCHEDULE ──
-          const commSchedDay = STATE.commSchedDay || sd[0]?.num || 1;
-          const sdGames = l.games.filter(g => g.gameNum === commSchedDay);
-          const selDay = sd.find(d => d.num === commSchedDay);
-    
-          const dayPills = sd.map(d => {
-            const dg = l.games.filter(g => g.gameNum === d.num);
-            const allFinal = dg.length > 0 && dg.every(g => g.status === 'final');
-            const hasLive = dg.some(g => g.status === 'live');
-            const isSel = commSchedDay === d.num;
-            const isCur = d.num === currentDay;
-            return `<button onclick='STATE.commSchedDay=${d.num};R()' style='position:relative;padding:6px 13px;border-radius:999px;font-size:12px;font-weight:700;border:1.5px solid ${isSel?"var(--g)":allFinal?"rgba(22,163,74,.3)":hasLive?"rgba(239,68,68,.4)":"var(--b2)"};background:${isSel?"var(--gm)":allFinal?"rgba(22,163,74,.06)":"var(--f4)"};color:${isSel?"var(--gd)":allFinal?"var(--gd)":hasLive?"var(--red)":"var(--t2)"};cursor:pointer'>
-              ${isCur ? `<span style='position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;background:var(--g);border:2px solid #fff'></span>` : ''}
-              Day ${d.num}${allFinal?' ✓':''}
-            </button>`;
-          }).join('');
-    
-          const matchupRows = sdGames.map(g => {
-            const home = l.teams.find(t => t.id === g.home);
-            const away = l.teams.find(t => t.id === g.away);
-            const canEdit = g.status !== 'final';
-            const teamSelects = canEdit
-              ? `<select style='flex:1;min-width:100px;padding:5px 8px;border:1.5px solid var(--b2);border-radius:7px;font-size:12px;font-weight:700;color:var(--t1);background:#fff' onchange="swapMatchupTeam('${g.id}','home',this.value)">${l.teams.map(t=>`<option value='${t.id}' ${t.id===g.home?'selected':''}>${t.name}</option>`).join('')}</select>
-                 <span style='font-size:11px;font-weight:700;color:var(--t3)'>vs</span>
-                 <select style='flex:1;min-width:100px;padding:5px 8px;border:1.5px solid var(--b2);border-radius:7px;font-size:12px;font-weight:700;color:var(--t1);background:#fff' onchange="swapMatchupTeam('${g.id}','away',this.value)">${l.teams.map(t=>`<option value='${t.id}' ${t.id===g.away?'selected':''}>${t.name}</option>`).join('')}</select>`
-              : `<span style='font-size:13px;font-weight:700;color:var(--t1)'>${home?.name||'?'} <span style='color:var(--t3);font-weight:500'>vs</span> ${away?.name||'?'}</span>`;
-            let statusActions = '';
-            if (g.status === 'postponed') {
-              statusActions = `<span style='font-size:10px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,.1);padding:2px 8px;border-radius:999px'>⏸ Postponed</span><button class='btn btn-o btn-xs' onclick='reinstateGame("${g.id}")'>Reinstate</button>`;
-            } else if (g.status === 'final') {
-              statusActions = `${g.forfeit?`<span style='font-size:10px;font-weight:700;color:var(--red);background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);padding:2px 8px;border-radius:999px'>Forfeit</span>`:`<span style='font-size:10px;font-weight:700;color:var(--gd)'>✓ ${g.hs}–${g.as}</span>`}<button class='btn btn-o btn-xs' onclick='scoreGame("${g.id}")'>Edit</button>`;
-            } else {
-              statusActions = `${g.status!=='postponed'?`<input type='time' value='${to24(g.time||selDay?.time||"14:00")}' onchange="updateGameTime('${g.id}',from24(this.value))" style='padding:4px 7px;border:1px solid var(--b1);border-radius:6px;font-size:11px;font-weight:600;color:var(--t2);background:var(--f4);width:88px'>`:''}
-                <button class='btn btn-p btn-xs' onclick='scoreGame("${g.id}")'>Score</button>
-                <button class='btn btn-o btn-xs' style='color:#f59e0b;border-color:#f59e0b' onclick='postponeGame("${g.id}")'>Postpone</button>
-                <button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='openForfeitModal("${g.id}")'>Forfeit</button>`;
-            }
-            return `<div style='background:#fff;border-bottom:1px solid var(--b1);padding:11px 14px'>
-              <div style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px'>${teamSelects}</div>
-              <div style='display:flex;align-items:center;gap:6px;flex-wrap:wrap'>${statusActions}</div>
-              <div style='font-size:10px;color:var(--t3);margin-top:4px'>${g.court||'No court'}</div>
-            </div>`;
-          }).join('');
-    
-          const scheduleContent = `
-            <div style='padding:12px 14px;border-bottom:1px solid var(--b1);background:var(--f4)'>
-              <div style='font-size:11px;font-weight:700;color:var(--t3);margin-bottom:4px'>Current Day: Day ${currentDay} of ${sd.length}</div>
-              <details><summary style='font-size:11px;color:var(--t3);cursor:pointer'>Manually adjust day</summary>
-                <div style='display:flex;gap:8px;margin-top:8px'>
-                  <button class='btn btn-gh btn-sm' onclick='commissionerRewindDay()'>← Back</button>
-                  <button class='btn btn-o btn-sm' onclick='commissionerAdvanceDay()'>Advance →</button>
-                </div>
-              </details>
+          }).join('')}
+        </div>` : ''}
+
+        <!-- SCHEDULE -->
+        <div style='margin-top:20px'>
+          <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px'>
+            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Schedule</div>
+            <div style='display:flex;gap:6px'>
+              <button class='btn btn-p btn-sm' onclick='addCommGameDay()'>+ Add Day</button>
+              <button class='btn btn-o btn-sm' style='color:var(--red);border-color:var(--red)' onclick='confirmRegenerateSchedule()'>Regenerate</button>
             </div>
-            <div style='padding:12px 14px;border-bottom:1px solid var(--b1)'>
-              <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px'>
-                <span style='font-size:12px;font-weight:700;color:var(--t2)'>Game Days</span>
-                <div style='display:flex;gap:6px'>
-                  <button class='btn btn-p btn-sm' onclick='addCommGameDay()'>+ Add Day</button>
-                  <button class='btn btn-o btn-sm' style='color:var(--red);border-color:var(--red)' onclick='confirmRegenerateSchedule()'>Regenerate</button>
-                </div>
-              </div>
-              <div style='display:flex;gap:6px;flex-wrap:wrap'>${dayPills}</div>
+          </div>
+          <div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px'>${dayPills}</div>
+
+          ${selDay ? `<div style='background:#fff;border:1px solid var(--b1);border-radius:12px;overflow:hidden'>
+            <div style='padding:12px 14px;background:var(--f4);border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between'>
+              <span style='font-size:13px;font-weight:700;color:var(--t1)'>Day ${selDay.num} Settings</span>
+              ${sd.length > 1 ? `<button onclick='removeCommGameDay(${selDay.num})' style='font-size:11px;font-weight:700;color:var(--red);background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:3px 8px;cursor:pointer'>Remove Day</button>` : ''}
             </div>
-            ${selDay ? `
-            <div style='padding:12px 14px;border-bottom:1px solid var(--b1);background:var(--f4)'>
-              <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:8px'>
-                <span style='font-size:12px;font-weight:700;color:var(--t2)'>Day ${selDay.num} Settings</span>
-                ${sd.length > 1 ? `<button onclick='removeCommGameDay(${selDay.num})' style='font-size:11px;font-weight:700;color:var(--red);background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:3px 8px;cursor:pointer'>Remove Day</button>` : ''}
-              </div>
-              <div style='display:flex;gap:8px;flex-wrap:wrap'>
-                <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:3px'>Time</label><input class='fi' type='time' value='${to24(selDay.time||"14:00")}' onchange="STATE.league.gameDays=STATE.league.gameDays.map(d=>d.num===${selDay.num}?{...d,time:from24(this.value)}:d);R()"></div>
-                <div style='flex:2;min-width:160px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:3px'>Courts</label><input class='fi' value='${(selDay.courts||[]).join(", ")}' onchange="STATE.league.gameDays=STATE.league.gameDays.map(d=>d.num===${selDay.num}?{...d,courts:this.value.split(',').map(c=>c.trim()).filter(Boolean)}:d);R()"></div>
-                <div style='display:flex;align-items:flex-end'><button class='btn btn-p btn-sm' onclick='applyDayTime(${selDay.num})'>Apply</button></div>
+            <div style='padding:12px 14px;border-bottom:1px solid var(--b1);display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end'>
+              <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Time</label><input class='fi' type='time' value='${to24(selDay.time||"14:00")}' onchange="STATE.league.gameDays=STATE.league.gameDays.map(d=>d.num===${selDay.num}?{...d,time:from24(this.value)}:d);R()"></div>
+              <div style='flex:2;min-width:160px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Courts</label><input class='fi' value='${(selDay.courts||[]).join(", ")}' onchange="STATE.league.gameDays=STATE.league.gameDays.map(d=>d.num===${selDay.num}?{...d,courts:this.value.split(',').map(c=>c.trim()).filter(Boolean)}:d);R()"></div>
+              <button class='btn btn-p btn-sm' onclick='applyDayTime(${selDay.num})'>Apply</button>
+            </div>
+            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;padding:10px 14px 4px'>Matchups</div>
+            ${matchupRows || `<div style='padding:16px;text-align:center;color:var(--t3);font-size:13px'>No games on this day</div>`}
+          </div>` : ''}
+        </div>`;
+    }
+
+    function renderCommTeams(l) {
+      const freeAgents = l.players.filter(p => !p.teamId && !l.teams.some(t => t.captainId === p.id));
+      const captainCount = l.teams.filter(t => t.captainId).length;
+      const totalTeams = l.teams.length;
+      const allCaptainsSet = captainCount === totalTeams;
+      const tradeLog = l.tradeLog || [];
+      const teamOpts = l.teams.map(t => `<option value='${t.id}'>${t.name}</option>`).join('');
+
+      return `
+        <!-- CAPTAIN STATUS -->
+        ${!allCaptainsSet ? `<div style='background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px'>
+          <div>
+            <div style='font-size:13px;font-weight:800;color:#b45309'>⚡ ${captainCount} of ${totalTeams} captains assigned</div>
+            <div style='font-size:11px;color:#92400e;margin-top:2px'>Assign captains so teams are ready to draft</div>
+          </div>
+          <button class='btn btn-gh btn-sm' onclick='refreshLeagueFromDB()'>↻ Refresh</button>
+        </div>` : ''}
+
+        <!-- ADD PLAYER -->
+        <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px'>
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Rosters</div>
+          <button class='btn btn-p btn-sm' onclick='openAddPlayer()'>+ Add Player</button>
+        </div>
+
+        <!-- TEAMS -->
+        ${l.teams.map(t => {
+          const roster = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
+          const captain = t.captainId ? l.players.find(p => p.id === t.captainId) : null;
+          return `<div style='background:#fff;border:1.5px solid var(--b1);border-radius:12px;overflow:hidden;margin-bottom:10px'>
+            <div style='display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--f4);border-bottom:1px solid var(--b1)'>
+              ${teamAvatar(t, 'tm-av')}
+              <div style='flex:1;min-width:0'>
+                <div style='font-size:14px;font-weight:800;color:var(--t1)'>${t.name}</div>
+                <div style='font-size:11px;color:var(--t3)'>${captain ? `Captain: ${captain.name}` : 'No captain assigned'} · ${roster.length} player${roster.length!==1?'s':''}</div>
               </div>
             </div>
-            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;padding:10px 14px 4px'>Matchups — Day ${selDay.num}</div>
-            ${matchupRows || `<div style='padding:16px;text-align:center;color:var(--t3);font-size:13px'>No games on this day</div>`}` : ''}`;
-    
-          // ── 3. ROSTERS & PLAYERS ──
-          const freeAgents = l.players.filter(p => !p.teamId && !l.teams.some(t => t.captainId === p.id));
-          const captainCount = l.teams.filter(t => t.captainId).length;
-          const totalTeams = l.teams.length;
-          const allCaptainsSet = captainCount === totalTeams;
-          const rosterContent = `
-            <!-- Captain Assignment Section -->
-            <div style='padding:12px 14px;border-bottom:1px solid var(--b1);background:${allCaptainsSet?"rgba(22,163,74,.06)":"rgba(245,158,11,.04)"}'>
-              <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px'>
-                <div>
-                  <div style='font-size:12px;font-weight:800;color:${allCaptainsSet?"var(--gd)":"#b45309"};text-transform:uppercase;letter-spacing:.5px'>${allCaptainsSet?"✅ All Captains Assigned":"⚡ Assign Captains"}</div>
-                  <div style='font-size:13px;font-weight:700;color:var(--t1);margin-top:2px'>${captainCount} of ${totalTeams} captains filled</div>
-                </div>
-                <button class='btn btn-gh btn-sm' onclick='refreshLeagueFromDB()'>↻ Refresh</button>
-              </div>
-              <!-- Progress bar -->
-              <div style='height:6px;background:var(--b1);border-radius:999px;overflow:hidden;margin-bottom:12px'>
-                <div style='height:100%;width:${Math.round((captainCount/totalTeams)*100)}%;background:${allCaptainsSet?"var(--g)":"#f59e0b"};border-radius:999px;transition:width .3s'></div>
-              </div>
-              <!-- Player list for captain assignment -->
-              <div style='display:flex;flex-direction:column;gap:6px'>
-                ${l.players.sort((a,b) => (b.skill||0)-(a.skill||0)).map(p => {
-                  const isCaptain = p.isCaptain || l.teams.some(t => t.captainId === p.id);
-                  const captainTeam = l.teams.find(t => t.captainId === p.id);
-                  return `<div style='display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fff;border:1px solid var(--b1);border-radius:8px'>
-                    <div style='flex:1;min-width:0'>
-                      <div style='font-size:13px;font-weight:600;color:var(--t1)'>${p.name} ${p.skill?`<span style='font-size:11px;color:#16a34a;font-weight:700'>★${p.skill}</span>`:''}</div>
-                      ${isCaptain ? `<div style='font-size:10px;font-weight:700;color:var(--gd)'>Captain · ${captainTeam?.name||'Team'}</div>` : `<div style='font-size:10px;color:var(--t3)'>Player</div>`}
-                    </div>
-                    ${isCaptain
-                      ? `<button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='removeCaptain("${p.id}")'>Remove</button>`
-                      : `<button class='btn btn-p btn-xs' onclick='openAssignCaptain("${p.id}")'>Make Captain</button>`
-                    }
-                  </div>`;
-                }).join('')}
-              </div>
-            </div>
-            <!-- Header -->
-            <div style='padding:10px 14px;border-bottom:1px solid var(--b1);background:var(--f4);display:flex;justify-content:space-between;align-items:center'>
-              <span style='font-size:12px;font-weight:700;color:var(--t2)'>${l.players.length} players · ${freeAgents.length} free agents</span>
-              <button class='btn btn-p btn-sm' onclick='openAddPlayer()'>+ Add Player</button>
-            </div>
-            ${l.teams.map(t => {
-              const roster = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
-              return `<div style='border-bottom:1px solid var(--b1)'>
-                <div style='display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--f4)'>
-                  ${teamAvatar(t,'tm-av')}
-                  <span style='font-size:13px;font-weight:700;color:var(--t1);flex:1'>${t.name}</span>
-                  <span style='font-size:11px;color:var(--t3)'>${roster.length} players</span>
-                </div>
-                ${roster.map(p => {
-                  const isMe = p.userId === STATE.user?.id || p.id === STATE.user?.id;
-                  return `<div style='display:flex;align-items:center;gap:8px;padding:8px 14px 8px 36px;border-top:1px solid var(--b1);background:${isMe?"rgba(22,163,74,.04)":"#fff"}'>
-                    <span style='font-size:13px;font-weight:${isMe?700:500};color:${isMe?"#16a34a":"var(--t1)"};flex:1'>${p.name}${isMe?` <span style='font-size:10px;font-weight:800;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:1px 5px'>You</span>`:''}</span>
-                    ${p.skill ? `<span style='font-size:11px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:2px 7px'>★${p.skill}</span>` : `<span style='font-size:10px;color:#94a3b8'>Unrated</span>`}
-                    <button class='btn btn-o btn-xs' onclick='editPlayerName("${p.id}")'>✏️ Edit</button>
-                    <button class='btn btn-o btn-xs' onclick='openMovePlayer("${p.id}")'>Move</button>
-                  </div>`;
-                }).join('')}
+            ${roster.map(p => {
+              const isCap = t.captainId === p.id;
+              return `<div style='display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--b1)'>
+                <span style='font-size:13px;font-weight:${isCap?700:500};color:var(--t1);flex:1'>${p.name}${isCap?` <span style='font-size:9px;font-weight:800;background:var(--gm);color:var(--gd);border-radius:4px;padding:1px 5px'>CAP</span>`:''}</span>
+                ${p.skill ? `<span style='font-size:11px;color:#16a34a;font-weight:700'>★${p.skill}</span>` : ''}
+                ${isCap
+                  ? `<button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='removeCaptain("${p.id}")'>Remove Cap</button>`
+                  : `<button class='btn btn-o btn-xs' onclick='openMovePlayer("${p.id}")'>Move</button>`}
               </div>`;
             }).join('')}
-            ${freeAgents.length ? `<div style='border-bottom:1px solid var(--b1)'>
-              <div style='padding:9px 14px;background:rgba(245,158,11,.04)'>
-                <span style='font-size:12px;font-weight:700;color:#b45309'>Free Agents (${freeAgents.length})</span>
-              </div>
-              ${freeAgents.map(p => {
-                const isMe = p.userId === STATE.user?.id || p.id === STATE.user?.id;
-                return `<div style='display:flex;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid var(--b1);background:${isMe?"rgba(22,163,74,.04)":"#fff"}'>
-                  <span style='font-size:13px;font-weight:${isMe?700:500};color:${isMe?"#16a34a":"var(--t1)"};flex:1'>${p.name}${isMe?` <span style='font-size:10px;font-weight:800;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:1px 5px'>You</span>`:''}</span>
-                  ${p.skill ? `<span style='font-size:11px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:2px 7px'>★${p.skill}</span>` : `<span style='font-size:10px;color:#94a3b8'>Unrated</span>`}
-                  <button class='btn btn-o btn-xs' onclick='editPlayerName("${p.id}")'>✏️ Edit</button>
-                  <button class='btn btn-o btn-xs' onclick='openMovePlayer("${p.id}")'>Assign</button>
-                </div>`;
-              }).join('')}
-            </div>` : ''}`;
-    
-          // ── 4. DRAFT ──
-          const ds = l.draftState;
-          const draftContent = `
-            <div style='padding:14px'>
-              <div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px'>
-                ${!ds ? `<button class='btn btn-p btn-sm' onclick='beginDraftTransition()'>▶ Start Draft</button><button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Sim Draft</button>`
-                  : ds.status === 'active' ? `<button class='btn btn-o btn-sm' onclick='pauseDraft()'>⏸ Pause</button><button class='btn btn-gh btn-sm' onclick='autoPick()'>Auto Pick</button>`
-                  : ds.status === 'paused' ? `<button class='btn btn-p btn-sm' onclick='resumeDraft()'>▶ Resume</button>`
-                  : `<button class='btn btn-p btn-sm' onclick="STATE.appTab='draft';R()">View Draft</button><button class='btn btn-o btn-sm' onclick='beginSeasonTransition()'>Enter League</button>`}
-                <button class='btn btn-o btn-sm' style='color:var(--red);border-color:var(--red)' onclick='resetDraftBoard()'>Reset Draft</button>
-              </div>
-              ${ds ? `<div style='background:var(--f4);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--t2)'>
-                <div style='display:flex;justify-content:space-between;margin-bottom:4px'><span>Status</span><strong>${ds.status}</strong></div>
-                <div style='display:flex;justify-content:space-between;margin-bottom:4px'><span>Picks</span><strong>${ds.picks.length}/${ds.total}</strong></div>
-                <div style='display:flex;justify-content:space-between'><span>Timer</span><strong>${ds.secs}s</strong></div>
-              </div>` : ''}
+            ${!captain ? `<div style='padding:10px 14px;background:rgba(245,158,11,.04)'>
+              ${l.players.filter(pl => !pl.isCaptain && !l.teams.some(tt => tt.captainId === pl.id)).length
+                ? `<select id='cap-sel-${t.id}' class='fi' style='display:inline-block;width:auto;margin-right:8px'><option value=''>Pick captain...</option>${l.players.filter(pl => !pl.isCaptain && !l.teams.some(tt => tt.captainId === pl.id)).map(pl=>`<option value='${pl.id}'>${pl.name}</option>`).join('')}</select>
+                   <button class='btn btn-p btn-sm' onclick="const v=document.getElementById('cap-sel-${t.id}').value;if(v)assignCaptain(v,'${t.id}')">Assign</button>`
+                : `<span style='font-size:12px;color:var(--t3)'>All players are assigned as captains</span>`}
+            </div>` : ''}
+          </div>`;
+        }).join('')}
+
+        ${freeAgents.length ? `
+        <div style='margin-top:4px;margin-bottom:16px'>
+          <div style='font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Free Agents (${freeAgents.length})</div>
+          ${freeAgents.map(p => `<div style='background:#fff;border:1px solid var(--b1);border-radius:10px;display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:6px'>
+            <span style='font-size:13px;font-weight:500;color:var(--t1);flex:1'>${p.name}</span>
+            ${p.skill ? `<span style='font-size:11px;color:#16a34a;font-weight:700'>★${p.skill}</span>` : ''}
+            <button class='btn btn-p btn-xs' onclick='openAssignCaptain("${p.id}")'>Make Captain</button>
+            <button class='btn btn-o btn-xs' onclick='openMovePlayer("${p.id}")'>Assign</button>
+          </div>`).join('')}
+        </div>` : ''}
+
+        <!-- TRADES -->
+        <div style='margin-top:8px'>
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Trades</div>
+          <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:10px'>
+            <div style='display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px'>
+              <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>From Team</label><select class='fi' id='trade-team-a'><option value=''>Select team</option>${teamOpts}</select></div>
+              <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>To Team</label><select class='fi' id='trade-team-b'><option value=''>Free Agency</option>${teamOpts}</select></div>
             </div>
-            <div style='border-top:1px solid var(--b1);padding:0'>
-              <div style='padding:10px 14px 6px;font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px'>Draft Order</div>
-              ${l.draftOrder.map((tid, i) => {
-                const t = l.teams.find(x => x.id === tid);
-                const locked = !!ds;
-                return `<div style='display:flex;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid var(--b1)'>
-                  <span style='font-size:12px;font-weight:700;color:var(--t3);min-width:20px'>${i+1}.</span>
-                  <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1'>${t?.name||'?'}</span>
-                  ${locked ? `<span style='font-size:10px;color:var(--t3)'>Locked</span>`
-                    : `<div style='display:flex;gap:4px'>
-                        ${i>0?`<button class='btn btn-gh btn-xs' onclick='swapOrd(${i},-1)'>▲</button>`:''}
-                        ${i<l.draftOrder.length-1?`<button class='btn btn-gh btn-xs' onclick='swapOrd(${i},1)'>▼</button>`:''}
-                      </div>`}
-                </div>`;
-              }).join('')}
-            </div>`;
-    
-          // ── 5. TRADES ──
-          const tradeLog = l.tradeLog || [];
-          const teamOpts = l.teams.map(t => `<option value='${t.id}'>${t.name}</option>`).join('');
-          const tradesContent = `
-            <div style='padding:14px;border-bottom:1px solid var(--b1)'>
-              <div style='display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px'>
-                <div style='flex:1;min-width:120px'>
-                  <label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>From Team</label>
-                  <select class='fi' id='trade-team-a'><option value=''>Select team</option>${teamOpts}</select>
-                </div>
-                <div style='flex:1;min-width:120px'>
-                  <label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>To Team / Free Agency</label>
-                  <select class='fi' id='trade-team-b'><option value=''>Free Agency</option>${teamOpts}</select>
-                </div>
-              </div>
-              <div style='display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px'>
-                <div style='flex:1;min-width:120px'>
-                  <label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Player A</label>
-                  <select class='fi' id='trade-player-a'><option value=''>Select player</option>${l.players.map(p=>`<option value='${p.id}'>${p.name} (${l.teams.find(t=>t.id===p.teamId)?.name||'FA'})</option>`).join('')}</select>
-                </div>
-                <div style='flex:1;min-width:120px'>
-                  <label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Player B (optional)</label>
-                  <select class='fi' id='trade-player-b'><option value=''>None</option>${l.players.map(p=>`<option value='${p.id}'>${p.name} (${l.teams.find(t=>t.id===p.teamId)?.name||'FA'})</option>`).join('')}</select>
-                </div>
-              </div>
-              <button class='btn btn-p btn-sm' onclick='executeTrade()'>Execute Trade</button>
+            <div style='display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px'>
+              <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Player A</label><select class='fi' id='trade-player-a'><option value=''>Select player</option>${l.players.map(p=>`<option value='${p.id}'>${p.name} (${l.teams.find(t=>t.id===p.teamId)?.name||'FA'})</option>`).join('')}</select></div>
+              <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Player B (optional)</label><select class='fi' id='trade-player-b'><option value=''>None</option>${l.players.map(p=>`<option value='${p.id}'>${p.name} (${l.teams.find(t=>t.id===p.teamId)?.name||'FA'})</option>`).join('')}</select></div>
             </div>
-            ${tradeLog.length ? `<div style='padding:10px 14px 4px;font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px'>Trade Log</div>
-            ${[...tradeLog].reverse().map(t=>`<div style='padding:10px 14px;border-top:1px solid var(--b1)'><div style='font-size:12px;font-weight:700;color:var(--t1)'>${t.desc}</div><div style='font-size:10px;color:var(--t3);margin-top:2px'>${t.date}</div></div>`).join('')}` : ''}`;
-    
-          // ── 6. HISTORY ──
-          const finalGames = l.games.filter(g => g.status === 'final').sort((a,b) => a.gameNum - b.gameNum);
-          const dayNums = [...new Set(finalGames.map(g => g.gameNum))].sort((a,b)=>a-b);
-          const historyContent = dayNums.length ? dayNums.map(dayNum => {
-            const dg = finalGames.filter(g => g.gameNum === dayNum);
-            const rows = dg.map(g => {
-              const home = l.teams.find(t => t.id === g.home);
-              const away = l.teams.find(t => t.id === g.away);
-              if (!home || !away) return '';
-              const homeWon = (g.hs||0) > (g.as||0);
-              return `<div style='display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--b1)'>
-                <div style='flex:1;min-width:0'>
-                  <div style='font-size:12px;font-weight:${homeWon?700:500};color:${homeWon?"var(--t1)":"var(--t3)"}'>${home.name}</div>
-                  <div style='font-size:12px;font-weight:${!homeWon?700:500};color:${!homeWon?"var(--t1)":"var(--t3)"}'>${away.name}</div>
-                </div>
-                <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:20px;color:var(--t1);text-align:right'>
-                  <div style='color:${homeWon?"var(--t1)":"var(--t3)"}'>${g.hs}</div>
-                  <div style='color:${!homeWon?"var(--t1)":"var(--t3)"}'>${g.as}</div>
-                </div>
-                ${g.forfeit?`<span style='font-size:10px;font-weight:700;color:var(--red);background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);padding:2px 7px;border-radius:999px'>Forfeit</span>`:''}
-                <button class='btn btn-o btn-xs' onclick='scoreGame("${g.id}")'>Edit</button>
-              </div>`;
-            }).join('');
-            return `<div style='border-bottom:1px solid var(--b1)'><div style='padding:7px 14px;background:var(--f4);font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Game Day ${dayNum}</div>${rows}</div>`;
-          }).join('') : `<div style='padding:24px;text-align:center;color:var(--t3);font-size:13px'>No completed games yet.</div>`;
-    
-          // ── 7. PLAYOFFS ──
-          const allDone = l.games.length > 0 && l.games.filter(g => g.status !== 'postponed').every(g => g.status === 'final');
-          const pc = l.playoffConfig;
-          const maxTeams = Math.min(8, l.teams.length);
-          const validCounts = [4,6,8].filter(n => n <= maxTeams);
-          const selCount = pc?.numTeams || validCounts[0] || 4;
-          const selFormat = pc?.format || 'single';
-          const selPlayIn = !!(pc?.playIn) && selCount >= 8;
-          // Custom seeds or standings order
-          const seedOrder = (pc?.customSeeds && pc.customSeeds.length === selCount)
-            ? pc.customSeeds.map(id => ({ team: l.teams.find(t => t.id === id), ...(() => { const r = standings.find(s => s.team.id === id); return r ? { w: r.w, l: r.l } : { w: 0, l: 0 }; })() })).filter(x => x.team)
-            : standings.slice(0, selCount).map(r => ({ team: r.team, w: r.w, l: r.l }));
+            <button class='btn btn-p btn-sm' onclick='executeTrade()'>Execute Trade</button>
+          </div>
+          ${tradeLog.length ? [...tradeLog].reverse().map(t=>`<div style='background:#fff;border:1px solid var(--b1);border-radius:8px;padding:10px 14px;margin-bottom:6px'><div style='font-size:12px;font-weight:700;color:var(--t1)'>${t.desc}</div><div style='font-size:10px;color:var(--t3);margin-top:2px'>${t.date}</div></div>`).join('') : `<div style='text-align:center;padding:16px;color:var(--t3);font-size:13px'>No trades yet</div>`}
+        </div>`;
+    }
 
-          // Playoff game rows for bracket scoring
-          const bracketRows = pc?.bracket ? pc.bracket.map((round, ri) => {
-            return round.games.map((g, gi) => {
-              const home = l.teams.find(t => t.id === g.home);
-              const away = l.teams.find(t => t.id === g.away);
-              const isBest3 = g.format === 'best3';
+    function renderCommLeague(l, standings) {
+      const allDone = l.games.length > 0 && l.games.filter(g => g.status !== 'postponed').every(g => g.status === 'final');
+      const pc = l.playoffConfig;
+      const maxTeams = Math.min(8, l.teams.length);
+      const validCounts = [4,6,8].filter(n => n <= maxTeams);
+      const selCount = pc?.numTeams || validCounts[0] || 4;
+      const selFormat = pc?.format || 'single';
+      const selPlayIn = !!(pc?.playIn) && selCount >= 8;
+      const seedOrder = (pc?.customSeeds && pc.customSeeds.length === selCount)
+        ? pc.customSeeds.map(id => ({ team: l.teams.find(t => t.id === id), ...(() => { const r = standings.find(s => s.team.id === id); return r ? { w: r.w, l: r.l } : { w: 0, l: 0 }; })() })).filter(x => x.team)
+        : standings.slice(0, selCount).map(r => ({ team: r.team, w: r.w, l: r.l }));
 
-              // Awaiting teams from previous round
-              if (!home || !away) {
-                return `<div style='padding:9px 14px;border-top:1px solid var(--b1);font-size:12px;color:var(--t3);font-style:italic'>${round.name} — awaiting previous result</div>`;
-              }
-
-              if (isBest3) {
-                // Best-of-3: show a game log that builds up
-                const played = g.gamesPlayed || [];
-                const hw = (g.seriesWins && g.seriesWins[g.home]) || 0;
-                const aw = (g.seriesWins && g.seriesWins[g.away]) || 0;
-                const seriesOver = g.status === 'final';
-                const seriesWinner = seriesOver ? l.teams.find(t => t.id === g.winner) : null;
-
-                // Header row with series score
-                let headerBadge = '';
-                if (seriesOver && seriesWinner) {
-                  const ww = hw > aw ? hw+'-'+aw : aw+'-'+hw;
-                  headerBadge = `<span style='font-size:11px;font-weight:800;color:var(--gd);background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.25);border-radius:6px;padding:2px 8px'>🏆 ${seriesWinner.name} wins series ${ww}</span>`;
-                } else if (played.length > 0) {
-                  const leadTxt = hw === aw
-                    ? `Tied ${hw}–${aw}`
-                    : `${hw > aw ? home.name : away.name} leads ${Math.max(hw,aw)}–${Math.min(hw,aw)}`;
-                  headerBadge = `<span style='font-size:11px;font-weight:700;color:#b45309;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:6px;padding:2px 8px'>${leadTxt} · Game ${played.length+1} next</span>`;
-                } else {
-                  headerBadge = `<span style='font-size:10px;font-weight:600;color:var(--t3)'>Game 1 · Best of 3</span>`;
-                }
-
-                // Individual game log rows
-                const gameLogRows = played.map((pg, pgi) => {
-                  // Alternate home: odd games flip home/away
-                  const isFlipped = pgi % 2 === 1;
-                  const dispHome = isFlipped ? away : home;
-                  const dispAway = isFlipped ? home : away;
-                  const pgWinner = l.teams.find(t => t.id === pg.winner);
-                  const homeWon = pg.winner === dispHome.id;
-                  return `<div style='display:flex;align-items:center;gap:8px;padding:7px 14px 7px 28px;border-top:1px solid var(--b1);background:var(--f4)'>
-                    <div style='font-size:10px;font-weight:800;color:var(--t3);min-width:50px'>Game ${pgi+1}</div>
-                    <div style='flex:1;min-width:0'>
-                      <div style='font-size:12px;font-weight:${homeWon?700:500};color:${homeWon?"var(--t1)":"var(--t3)"}'>${dispHome.name} <span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:15px'>${isFlipped?pg.as:pg.hs}</span></div>
-                      <div style='font-size:12px;font-weight:${!homeWon?700:500};color:${!homeWon?"var(--t1)":"var(--t3)"}'>${dispAway.name} <span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:15px'>${isFlipped?pg.hs:pg.as}</span></div>
-                    </div>
-                    <span style='font-size:10px;font-weight:700;color:var(--gd)'>✓ ${pgWinner?.name||'?'} wins</span>
-                  </div>`;
-                }).join('');
-
-                // Next game button — only if series not over
-                const nextGameBtn = !seriesOver
-                  ? `<div style='padding:8px 14px;border-top:1px solid var(--b1)'>
-                      <button class='btn btn-p btn-sm' style='width:100%' onclick='scorePlayoffGame(${ri},${gi})'>Score Game ${played.length+1}</button>
-                    </div>`
-                  : '';
-
-                return `<div style='border-top:1px solid var(--b1)'>
-                  <div style='display:flex;align-items:center;gap:10px;padding:11px 14px'>
-                    <div style='flex:1;min-width:0'>
-                      <div style='font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:3px'>${round.name}</div>
-                      <div style='font-size:13px;font-weight:700;color:var(--t1)'>${home.name} <span style='color:var(--t3);font-weight:500'>vs</span> ${away.name}</div>
-                      <div style='margin-top:4px'>${headerBadge}</div>
-                    </div>
-                  </div>
-                  ${gameLogRows}
-                  ${nextGameBtn}
-                </div>`;
-              }
-
-              // Single elimination
-              const isDone = g.status === 'final';
-              const isLive = g.status === 'live';
-              return `<div style='display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--b1)'>
-                <div style='flex:1;min-width:0'>
-                  <div style='font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:2px'>${round.name}</div>
-                  <div style='font-size:13px;font-weight:700;color:var(--t1)'>${home.name} <span style='color:var(--t3);font-weight:500'>vs</span> ${away.name}</div>
-                </div>
-                <div style='font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:16px;color:var(--t2)'>${isDone?`${g.hs}–${g.as}`:isLive?`${g.hs??0}–${g.as??0} 🔴`:'–'}</div>
-                ${isDone?`<span style='font-size:10px;font-weight:700;color:var(--gd)'>✓ Final</span>`:`<button class='btn btn-p btn-xs' onclick='scorePlayoffGame(${ri},${gi})'>Score</button>`}
-              </div>`;
-            }).join('');
-          }).join('') : '';
-
-          const playoffContent = !allDone
-            ? `<div style='padding:18px;text-align:center'>
-                <div style='font-size:28px;margin-bottom:8px'>🚫</div>
-                <div style='font-size:14px;font-weight:800;color:var(--red);margin-bottom:6px'>Regular Season Not Complete</div>
-                <div style='font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px'>All regular season games must be final before playoffs can start.</div>
-                <button class='btn btn-o btn-sm' onclick="STATE.commOpen={...STATE.commOpen||{},playoffs:false,schedule:true};R()">Go to Schedule →</button>
-              </div>`
-            : `<div style='padding:14px'>
-                <div style='background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.2);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--gd);margin-bottom:14px'>✅ Regular season complete — ready for playoffs.</div>
-
-                <!-- Teams in playoffs -->
-                <div style='margin-bottom:14px'>
-                  <div style='font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px'>Teams in Playoffs</div>
-                  <div style='display:flex;gap:8px;flex-wrap:wrap'>
-                    ${validCounts.map(n=>`<button onclick="STATE.league.playoffConfig={...(STATE.league.playoffConfig||{}),numTeams:${n},bracket:null,customSeeds:null};R()" style='padding:6px 16px;border-radius:999px;font-size:12px;font-weight:700;border:1.5px solid ${selCount===n?"var(--gd)":"var(--b2)"};background:${selCount===n?"var(--gm)":"#fff"};color:${selCount===n?"var(--gd)":"var(--t2)"};cursor:pointer'>${n} Teams</button>`).join('')}
-                  </div>
-                </div>
-
-                <!-- Format -->
-                <div style='margin-bottom:14px'>
-                  <div style='font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px'>Series Format</div>
-                  <div style='display:flex;gap:8px;flex-wrap:wrap'>
-                    <button onclick="STATE.league.playoffConfig={...(STATE.league.playoffConfig||{}),format:'single',bracket:null};R()" style='padding:6px 16px;border-radius:999px;font-size:12px;font-weight:700;border:1.5px solid ${selFormat==='single'?"var(--gd)":"var(--b2)"};background:${selFormat==='single'?"var(--gm)":"#fff"};color:${selFormat==='single'?"var(--gd)":"var(--t2)"};cursor:pointer'>Single Elimination</button>
-                    <button onclick="STATE.league.playoffConfig={...(STATE.league.playoffConfig||{}),format:'best3',bracket:null};R()" style='padding:6px 16px;border-radius:999px;font-size:12px;font-weight:700;border:1.5px solid ${selFormat==='best3'?"var(--gd)":"var(--b2)"};background:${selFormat==='best3'?"var(--gm)":"#fff"};color:${selFormat==='best3'?"var(--gd)":"var(--t2)"};cursor:pointer'>Best of 3</button>
-                  </div>
-                </div>
-
-                <!-- Play-In (only for 8 teams) -->
-                ${selCount >= 8 ? `
-                <div style='margin-bottom:14px'>
-                  <div style='display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--f4);border-radius:10px;border:1px solid var(--b1)'>
-                    <div>
-                      <div style='font-size:13px;font-weight:700;color:var(--t1)'>Play-In Tournament</div>
-                      <div style='font-size:11px;color:var(--t3);margin-top:2px'>Seeds 5–8 compete · Winners advance to bracket · Always single game</div>
-                    </div>
-                    <button onclick="STATE.league.playoffConfig={...(STATE.league.playoffConfig||{}),playIn:${!selPlayIn},bracket:null};R()" style='padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:1.5px solid ${selPlayIn?"var(--gd)":"var(--b2)"};background:${selPlayIn?"var(--gm)":"#fff"};color:${selPlayIn?"var(--gd)":"var(--t2)"};cursor:pointer'>${selPlayIn?'✓ On':'Off'}</button>
-                  </div>
-                </div>` : ''}
-
-                <!-- Seeding — drag to reorder -->
-                <div style='background:var(--f4);border-radius:10px;border:1px solid var(--b1);margin-bottom:14px;overflow:hidden'>
-                  <div style='padding:10px 14px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between'>
-                    <div style='font-size:11px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.5px'>Playoff Seeds</div>
-                    <button onclick="STATE.league.playoffConfig={...(STATE.league.playoffConfig||{}),customSeeds:null,bracket:null};R()" style='font-size:10px;font-weight:700;color:var(--t3);background:none;border:none;cursor:pointer'>↺ Reset to Standings</button>
-                  </div>
-                  ${seedOrder.map((s,i)=>`
-                  <div style='display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--b1);background:#fff'>
-                    <span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:18px;color:var(--t3);min-width:22px'>${i+1}</span>
-                    ${teamAvatar(s.team,'tm-av')}
-                    <span style='font-size:13px;font-weight:700;color:var(--t1);flex:1'>${s.team.name}</span>
-                    <span style='font-size:11px;color:var(--t3)'>${s.w}–${s.l}</span>
-                    <div style='display:flex;flex-direction:column;gap:2px'>
-                      ${i>0?`<button onclick='moveSeed(${i},${i-1})' style='background:var(--f4);border:1px solid var(--b1);border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer;line-height:1'>▲</button>`:'<div style="width:26px"></div>'}
-                      ${i<seedOrder.length-1?`<button onclick='moveSeed(${i},${i+1})' style='background:var(--f4);border:1px solid var(--b1);border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer;line-height:1'>▼</button>`:'<div style="width:26px"></div>'}
-                    </div>
-                  </div>`).join('')}
-                </div>
-
-                <button class='btn btn-p btn-sm' style='width:100%' onclick='setupAndActivatePlayoffs()'>🏆 Generate & Activate Playoffs</button>
-                <div style='margin-top:10px;text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap'>
-                  <button class='btn btn-gh btn-sm' style='color:var(--t3)' onclick='skipPlayoffsEndSeason()'>Skip Playoffs — End Season</button>
-                  ${pc?.bracket?`<button class='btn btn-gh btn-sm' onclick="STATE.league.playoffConfig={...STATE.league.playoffConfig,bracket:null};R()">↺ Regenerate Bracket</button>`:''}
-                </div>
-              </div>
-              ${pc?.bracket && bracketRows ? `<div style='border-top:1px solid var(--b1)'>
-                <div style='padding:10px 14px 4px;font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px'>Score Playoff Games</div>
-                ${bracketRows}
-              </div>` : ''}`;
-    
-          // ── 8. LEAGUE SETTINGS ──
-          const settingsContent = `
-            <div style='padding:14px'>
-              <div class='fg'><label class='fl'>League Name</label><input class='fi' value='${l.name}' oninput="STATE.league.name=this.value;saveState()"></div>
-              <div class='fg'><label class='fl'>League Code</label>
-                <div style='display:flex;gap:8px'>
-                  <input class='fi' value='${l.id}' readonly style='font-family:"Barlow Condensed",sans-serif;font-weight:700;letter-spacing:1px'>
-                  <button class='btn btn-o btn-sm' onclick='showLeagueCode()'>📋 Show Code</button>
-                </div>
-              </div>
-              <div style='margin-top:14px;padding-top:14px;border-top:1px solid var(--b1)'>
-                <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>⚠️ Danger Zone</div>
-                <div style='display:flex;gap:8px;flex-wrap:wrap'>
-                  <button class='btn btn-o btn-sm' onclick='confirmReset()' style='color:var(--red);border-color:var(--red)'>🔄 Reset League</button>
-                  <button class='btn btn-o btn-sm' onclick="confirmDeleteLeague('${l.id}')" style='color:var(--red);border-color:var(--red);background:rgba(239,68,68,.04)'>🗑 Delete League</button>
-                </div>
-                <div style='font-size:11px;color:var(--t3);margin-top:8px;line-height:1.5'>Reset returns league to setup. Delete permanently removes all data.</div>
-              </div>
+      const bracketRows = pc?.bracket ? pc.bracket.map((round, ri) => round.games.map((g, gi) => {
+        const home = l.teams.find(t => t.id === g.home);
+        const away = l.teams.find(t => t.id === g.away);
+        if (!home || !away) return `<div style='padding:9px 14px;border-top:1px solid var(--b1);font-size:12px;color:var(--t3);font-style:italic'>${round.name} — awaiting previous result</div>`;
+        if (g.format === 'best3') {
+          const played = g.gamesPlayed || [];
+          const hw = (g.seriesWins && g.seriesWins[g.home]) || 0;
+          const aw = (g.seriesWins && g.seriesWins[g.away]) || 0;
+          const seriesOver = g.status === 'final';
+          const seriesWinner = seriesOver ? l.teams.find(t => t.id === g.winner) : null;
+          let headerBadge = '';
+          if (seriesOver && seriesWinner) { const ww = hw > aw ? hw+'-'+aw : aw+'-'+hw; headerBadge = `<span style='font-size:11px;font-weight:800;color:var(--gd);background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.25);border-radius:6px;padding:2px 8px'>🏆 ${seriesWinner.name} wins ${ww}</span>`; }
+          else if (played.length > 0) { const leadTxt = hw === aw ? `Tied ${hw}–${aw}` : `${hw > aw ? home.name : away.name} leads ${Math.max(hw,aw)}–${Math.min(hw,aw)}`; headerBadge = `<span style='font-size:11px;font-weight:700;color:#b45309;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:6px;padding:2px 8px'>${leadTxt} · Game ${played.length+1} next</span>`; }
+          else { headerBadge = `<span style='font-size:10px;font-weight:600;color:var(--t3)'>Game 1 · Best of 3</span>`; }
+          const gameLogRows = played.map((pg, pgi) => {
+            const isFlipped = pgi % 2 === 1;
+            const dispHome = isFlipped ? away : home;
+            const dispAway = isFlipped ? home : away;
+            const pgWinner = l.teams.find(t => t.id === pg.winner);
+            const homeWon = pg.winner === dispHome.id;
+            return `<div style='display:flex;align-items:center;gap:8px;padding:7px 14px 7px 28px;border-top:1px solid var(--b1);background:var(--f4)'>
+              <div style='font-size:10px;font-weight:800;color:var(--t3);min-width:50px'>Game ${pgi+1}</div>
+              <div style='flex:1'><div style='font-size:12px;font-weight:${homeWon?700:500};color:${homeWon?"var(--t1)":"var(--t3)"}'>${dispHome.name} ${isFlipped?pg.as:pg.hs}</div><div style='font-size:12px;font-weight:${!homeWon?700:500};color:${!homeWon?"var(--t1)":"var(--t3)"}'>${dispAway.name} ${isFlipped?pg.hs:pg.as}</div></div>
+              <span style='font-size:10px;font-weight:700;color:var(--gd)'>✓ ${pgWinner?.name||'?'} wins</span>
             </div>`;
-    
-          // ── Assemble all sections ──
-          const body = `
-            <div style='padding:14px 16px 0'>
-    
-              <!-- Header card -->
-              <div style='background:linear-gradient(135deg,#07110b,#0b1220,#111827);border-radius:16px;padding:16px 18px;margin-bottom:16px;position:relative;overflow:hidden'>
-                <div style='position:absolute;inset:0;background:radial-gradient(circle at 10% 50%,#16a34a22,transparent 50%);pointer-events:none'></div>
-                <div style='position:relative;z-index:1'>
-                  <div style='font-size:10px;font-weight:800;color:rgba(255,255,255,.4);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:4px'>Commissioner Tools</div>
-                  <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:26px;color:#fff'>${l.name}</div>
-                  <div style='display:flex;gap:10px;margin-top:12px;flex-wrap:wrap'>
-                    <div style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 12px;text-align:center'>
-                      <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:20px;color:#fff'>${finalGamesCount}/${totalGames}</div>
-                      <div style='font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px'>Games Done</div>
-                    </div>
-                    <div style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 12px;text-align:center'>
-                      <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:20px;color:#fff'>Day ${currentDay}</div>
-                      <div style='font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px'>Current Day</div>
-                    </div>
-                    <div style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 12px;text-align:center'>
-                      <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:20px;color:#fff'>${pct}%</div>
-                      <div style='font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px'>Complete</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-    
-              ${section('today', '🏀', "Today's Games", todayBadge, todayContent, needsScoring)}
-              ${section('schedule', '🗓️', 'Schedule', `${sd.length} days`, scheduleContent, false)}
-              ${section('rosters', '👥', 'Rosters & Players', `${l.players.length} players`, rosterContent, false)}
-              ${section('draft', '🎯', 'Draft', ds ? `${ds.picks?.length||0}/${ds.total||0} picks` : 'Not started', draftContent, false)}
-              ${section('trades', '🔄', 'Trades', tradeLog.length ? `${tradeLog.length} trades` : '', tradesContent, false)}
-              ${section('history', '📋', 'History', `${finalGamesCount} games`, historyContent, false)}
-              ${section('playoffs', '🏆', 'Playoffs', allDone ? 'Season complete ✓' : `${totalGames - finalGamesCount} games remaining`, playoffContent, allDone && !pc?.bracket)}
-              ${section('settings', '⚙️', 'League Settings', '', settingsContent, false)}
-    
-            </div>`;
-    
-          return `<div class='comm-hero'><div class='ph-title'>Commissioner</div></div><div class='comm-body'>${body}</div>`;
+          }).join('');
+          return `<div style='border-top:1px solid var(--b1)'>
+            <div style='padding:11px 14px'>
+              <div style='font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:3px'>${round.name}</div>
+              <div style='font-size:13px;font-weight:700;color:var(--t1)'>${home.name} vs ${away.name}</div>
+              <div style='margin-top:4px'>${headerBadge}</div>
+            </div>
+            ${gameLogRows}
+            ${!seriesOver ? `<div style='padding:8px 14px;border-top:1px solid var(--b1)'><button class='btn btn-p btn-sm' style='width:100%' onclick='scorePlayoffGame(${ri},${gi})'>Score Game ${played.length+1}</button></div>` : ''}
+          </div>`;
         }
+        const isDone = g.status === 'final';
+        const isLive = g.status === 'live';
+        return `<div style='display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--b1)'>
+          <div style='flex:1'><div style='font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:2px'>${round.name}</div><div style='font-size:13px;font-weight:700;color:var(--t1)'>${home.name} vs ${away.name}</div></div>
+          <div style='font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:16px;color:var(--t2)'>${isDone?`${g.hs}–${g.as}`:isLive?`${g.hs??0}–${g.as??0} 🔴`:'–'}</div>
+          ${isDone?`<span style='font-size:10px;font-weight:700;color:var(--gd)'>✓ Final</span>`:`<button class='btn btn-p btn-xs' onclick='scorePlayoffGame(${ri},${gi})'>Score</button>`}
+        </div>`;
+      }).join('')).join('') : '';
+
+      return `
+        <!-- LEAGUE INFO -->
+        <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>League Info</div>
+        <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:20px'>
+          <div class='fg' style='margin-bottom:10px'><label class='fl'>League Name</label><input class='fi' value='${l.name}' oninput="STATE.league.name=this.value;saveState()"></div>
+          <div class='fg' style='margin-bottom:0'><label class='fl'>League Code</label>
+            <div style='display:flex;gap:8px'>
+              <input class='fi' value='${l.id}' readonly style='font-family:"Barlow Condensed",sans-serif;font-weight:700;letter-spacing:1px'>
+              <button class='btn btn-o btn-sm' onclick='showLeagueCode()'>📋 Share</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- COURTS -->
+        <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Courts</div>
+        <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:20px'>
+          ${l.courts.map((c, i) => `<div style='display:flex;gap:8px;align-items:center;margin-bottom:8px'>
+            <input class='fi' style='flex:1' value='${c}' onblur="renameScheduleCourt(${i}, this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder='Court name'>
+            <button onclick="removeScheduleCourt(${i})" style='width:32px;height:32px;border-radius:8px;background:var(--f4);border:1px solid var(--b1);cursor:pointer;font-size:16px;color:var(--t3)' ${l.courts.filter(Boolean).length <= 1 ? 'disabled' : ''}>×</button>
+          </div>`).join('')}
+          <button onclick="addScheduleCourt()" class='btn btn-o btn-sm' style='margin-top:4px'>+ Add Court</button>
+        </div>
+
+        <!-- HISTORY -->
+        <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Results History</div>
+        <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;overflow:hidden;margin-bottom:20px'>
+          ${(() => {
+            const finalGames = l.games.filter(g => g.status === 'final').sort((a,b) => a.gameNum - b.gameNum);
+            const dayNums = [...new Set(finalGames.map(g => g.gameNum))].sort((a,b)=>a-b);
+            if (!dayNums.length) return `<div style='padding:20px;text-align:center;color:var(--t3);font-size:13px'>No completed games yet</div>`;
+            return dayNums.map(dayNum => {
+              const dg = finalGames.filter(g => g.gameNum === dayNum);
+              const rows = dg.map(g => {
+                const home = l.teams.find(t => t.id === g.home);
+                const away = l.teams.find(t => t.id === g.away);
+                if (!home || !away) return '';
+                const homeWon = (g.hs||0) > (g.as||0);
+                return `<div style='display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--b1)'>
+                  <div style='flex:1'>
+                    <div style='font-size:12px;font-weight:${homeWon?700:500};color:${homeWon?"var(--t1)":"var(--t3)"}'>${home.name}</div>
+                    <div style='font-size:12px;font-weight:${!homeWon?700:500};color:${!homeWon?"var(--t1)":"var(--t3)"}'>${away.name}</div>
+                  </div>
+                  <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:20px;text-align:right'>
+                    <div style='color:${homeWon?"var(--t1)":"var(--t3)"}'>${g.hs}</div>
+                    <div style='color:${!homeWon?"var(--t1)":"var(--t3)"}'>${g.as}</div>
+                  </div>
+                  <button class='btn btn-o btn-xs' onclick='scoreGame("${g.id}")'>Edit</button>
+                </div>`;
+              }).join('');
+              return `<div style='border-bottom:1px solid var(--b1)'><div style='padding:7px 14px;background:var(--f4);font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Game Day ${dayNum}</div>${rows}</div>`;
+            }).join('');
+          })()}
+        </div>
+
+        <!-- PLAYOFFS -->
+        <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Playoffs</div>
+        <div style='background:#fff;border:1px solid ${allDone && !pc?.bracket ? 'rgba(239,68,68,.3)' : 'var(--b1)'};border-radius:12px;overflow:hidden;margin-bottom:20px'>
+          ${!allDone ? `<div style='padding:20px;text-align:center'>
+            <div style='font-size:28px;margin-bottom:8px'>🚫</div>
+            <div style='font-size:14px;font-weight:800;color:var(--red);margin-bottom:6px'>Regular Season Not Complete</div>
+            <div style='font-size:12px;color:var(--t2);line-height:1.6'>${l.games.filter(g => g.status !== 'final' && g.status !== 'postponed').length} games remaining</div>
+          </div>` : `<div style='padding:14px'>
+            <div style='background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.2);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--gd);margin-bottom:14px'>✅ Regular season complete — ready for playoffs.</div>
+            <div style='margin-bottom:14px'>
+              <div style='font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px'>Teams in Playoffs</div>
+              <div style='display:flex;gap:8px;flex-wrap:wrap'>
+                ${validCounts.map(n=>`<button onclick="STATE.league.playoffConfig={...(STATE.league.playoffConfig||{}),numTeams:${n},bracket:null,customSeeds:null};R()" style='padding:6px 16px;border-radius:999px;font-size:12px;font-weight:700;border:1.5px solid ${selCount===n?'var(--gd)':'var(--b2)'};background:${selCount===n?'var(--gm)':'#fff'};color:${selCount===n?'var(--gd)':'var(--t2)'};cursor:pointer'>${n} Teams</button>`).join('')}
+              </div>
+            </div>
+            <div style='margin-bottom:14px'>
+              <div style='font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px'>Format</div>
+              <div style='display:flex;gap:8px;flex-wrap:wrap'>
+                <button onclick="STATE.league.playoffConfig={...(STATE.league.playoffConfig||{}),format:'single',bracket:null};R()" style='padding:6px 16px;border-radius:999px;font-size:12px;font-weight:700;border:1.5px solid ${selFormat==='single'?'var(--gd)':'var(--b2)'};background:${selFormat==='single'?'var(--gm)':'#fff'};color:${selFormat==='single'?'var(--gd)':'var(--t2)'};cursor:pointer'>Single Elimination</button>
+                <button onclick="STATE.league.playoffConfig={...(STATE.league.playoffConfig||{}),format:'best3',bracket:null};R()" style='padding:6px 16px;border-radius:999px;font-size:12px;font-weight:700;border:1.5px solid ${selFormat==='best3'?'var(--gd)':'var(--b2)'};background:${selFormat==='best3'?'var(--gm)':'#fff'};color:${selFormat==='best3'?'var(--gd)':'var(--t2)'};cursor:pointer'>Best of 3</button>
+              </div>
+            </div>
+            ${selCount >= 8 ? `<div style='margin-bottom:14px'>
+              <div style='display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--f4);border-radius:10px;border:1px solid var(--b1)'>
+                <div><div style='font-size:13px;font-weight:700;color:var(--t1)'>Play-In Tournament</div><div style='font-size:11px;color:var(--t3);margin-top:2px'>Seeds 5–8 compete for last spots</div></div>
+                <button onclick="STATE.league.playoffConfig={...(STATE.league.playoffConfig||{}),playIn:${!selPlayIn},bracket:null};R()" style='padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:1.5px solid ${selPlayIn?'var(--gd)':'var(--b2)'};background:${selPlayIn?'var(--gm)':'#fff'};color:${selPlayIn?'var(--gd)':'var(--t2)'};cursor:pointer'>${selPlayIn?'✓ On':'Off'}</button>
+              </div>
+            </div>` : ''}
+            <div style='background:var(--f4);border-radius:10px;border:1px solid var(--b1);margin-bottom:14px;overflow:hidden'>
+              <div style='padding:10px 14px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between'>
+                <div style='font-size:11px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.5px'>Playoff Seeds</div>
+                <button onclick="STATE.league.playoffConfig={...(STATE.league.playoffConfig||{}),customSeeds:null,bracket:null};R()" style='font-size:10px;font-weight:700;color:var(--t3);background:none;border:none;cursor:pointer'>↺ Reset</button>
+              </div>
+              ${seedOrder.map((s,i)=>`<div style='display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--b1);background:#fff'>
+                <span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:18px;color:var(--t3);min-width:22px'>${i+1}</span>
+                ${teamAvatar(s.team,'tm-av')}
+                <span style='font-size:13px;font-weight:700;color:var(--t1);flex:1'>${s.team.name}</span>
+                <span style='font-size:11px;color:var(--t3)'>${s.w}–${s.l}</span>
+                <div style='display:flex;flex-direction:column;gap:2px'>
+                  ${i>0?`<button onclick='moveSeed(${i},${i-1})' style='background:var(--f4);border:1px solid var(--b1);border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer'>▲</button>`:'<div style="width:26px"></div>'}
+                  ${i<seedOrder.length-1?`<button onclick='moveSeed(${i},${i+1})' style='background:var(--f4);border:1px solid var(--b1);border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer'>▼</button>`:'<div style="width:26px"></div>'}
+                </div>
+              </div>`).join('')}
+            </div>
+            <button class='btn btn-p btn-sm' style='width:100%' onclick='setupAndActivatePlayoffs()'>🏆 Generate & Activate Playoffs</button>
+            <div style='margin-top:10px;text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap'>
+              <button class='btn btn-gh btn-sm' style='color:var(--t3)' onclick='skipPlayoffsEndSeason()'>Skip Playoffs — End Season</button>
+              ${pc?.bracket?`<button class='btn btn-gh btn-sm' onclick="STATE.league.playoffConfig={...STATE.league.playoffConfig,bracket:null};R()">↺ Regenerate Bracket</button>`:''}
+            </div>
+          </div>
+          ${pc?.bracket && bracketRows ? `<div style='border-top:1px solid var(--b1)'>
+            <div style='padding:10px 14px 4px;font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px'>Score Playoff Games</div>
+            ${bracketRows}
+          </div>` : ''}`}
+        </div>
+
+        <!-- DANGER ZONE -->
+        <div style='font-size:10px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>⚠️ Danger Zone</div>
+        <div style='background:#fff;border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:14px;margin-bottom:20px'>
+          <div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>
+            <button class='btn btn-o btn-sm' onclick='confirmReset()' style='color:var(--red);border-color:var(--red)'>🔄 Reset League</button>
+            <button class='btn btn-o btn-sm' onclick="confirmDeleteLeague('${l.id}')" style='color:var(--red);border-color:var(--red)'>🗑 Delete League</button>
+          </div>
+          <div style='font-size:11px;color:var(--t3);line-height:1.5'>Reset returns to setup. Delete permanently removes all data.</div>
+        </div>`;
+    }
+
+    function renderCommDraft(l) {
+      const ds = l.draftState;
+      return `
+        <!-- DRAFT STATUS -->
+        <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Draft Status</div>
+        <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:20px'>
+          ${ds ? `<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px'>
+            <div style='background:var(--f4);border-radius:10px;padding:10px;text-align:center'>
+              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:var(--t1)'>${ds.picks?.length||0}</div>
+              <div style='font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase'>Picks Made</div>
+            </div>
+            <div style='background:var(--f4);border-radius:10px;padding:10px;text-align:center'>
+              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:var(--t1)'>${ds.total||0}</div>
+              <div style='font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase'>Total Picks</div>
+            </div>
+            <div style='background:var(--f4);border-radius:10px;padding:10px;text-align:center'>
+              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:var(--g)'>${ds.status}</div>
+              <div style='font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase'>Status</div>
+            </div>
+          </div>` : `<div style='text-align:center;padding:10px 0 4px;font-size:13px;color:var(--t3)'>Draft has not started yet</div>`}
+          <div style='display:flex;gap:8px;flex-wrap:wrap'>
+            ${!ds ? `<button class='btn btn-p btn-sm' onclick='beginDraftTransition()'>▶ Start Draft</button><button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Sim Draft</button>`
+              : ds.status === 'active' ? `<button class='btn btn-o btn-sm' onclick='pauseDraft()'>⏸ Pause</button><button class='btn btn-gh btn-sm' onclick='autoPick()'>Auto Pick</button>`
+              : ds.status === 'paused' ? `<button class='btn btn-p btn-sm' onclick='resumeDraft()'>▶ Resume</button>`
+              : `<button class='btn btn-p btn-sm' onclick="STATE.appTab='draft';R()">View Draft</button><button class='btn btn-o btn-sm' onclick='beginSeasonTransition()'>Enter League</button>`}
+            <button class='btn btn-o btn-sm' style='color:var(--red);border-color:var(--red)' onclick='resetDraftBoard()'>Reset Draft</button>
+          </div>
+        </div>
+
+        <!-- DRAFT ORDER -->
+        <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Draft Order</div>
+        <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;overflow:hidden;margin-bottom:20px'>
+          ${l.draftOrder.map((tid, i) => {
+            const t = l.teams.find(x => x.id === tid);
+            const locked = !!ds;
+            return `<div style='display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--b1)'>
+              <span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:18px;color:var(--t3);min-width:24px'>${i+1}</span>
+              ${teamAvatar(t||{name:'?',color:'#64748b'}, 'tm-av')}
+              <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1'>${t?.name||'?'}</span>
+              ${locked ? `<span style='font-size:10px;color:var(--t3)'>Locked</span>`
+                : `<div style='display:flex;gap:4px'>
+                    ${i>0?`<button class='btn btn-gh btn-xs' onclick='swapOrd(${i},-1)'>▲</button>`:''}
+                    ${i<l.draftOrder.length-1?`<button class='btn btn-gh btn-xs' onclick='swapOrd(${i},1)'>▼</button>`:''}
+                  </div>`}
+            </div>`;
+          }).join('')}
+        </div>
+
+        ${ds?.picks?.length ? `
+        <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Draft Recap</div>
+        <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;overflow:hidden;margin-bottom:20px'>
+          ${ds.picks.map((pk, i) => {
+            const t = l.teams.find(x => x.id === pk.tid);
+            return `<div style='display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--b1)'>
+              <span style='font-size:11px;font-weight:700;color:var(--t3);min-width:30px'>#${pk.num}</span>
+              ${t ? teamAvatar(t, 'tm-av') : ''}
+              <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1'>${pk.pn}</span>
+              <span style='font-size:11px;color:var(--t3)'>${t?.name||'?'}</span>
+            </div>`;
+          }).join('')}
+        </div>` : ''}`;
+    }
+
+    function renderComm() {
+      const l = STATE.league;
+      if (!l) return '';
+      const tab = STATE.commTab || 'gameday';
+      const standings = getStandingsRows(l);
+      const totalGames = l.games.length;
+      const finalGamesCount = l.games.filter(g => g.status === 'final').length;
+      const pct = totalGames ? Math.round((finalGamesCount/totalGames)*100) : 0;
+      const currentDay = l.currentDayGameNum || 1;
+
+      const tabs = [
+        { key: 'gameday', icon: '🏀', label: 'Game Day' },
+        { key: 'teams', icon: '👥', label: 'Teams' },
+        { key: 'league', icon: '⚙️', label: 'League' },
+        { key: 'draft', icon: '🎯', label: 'Draft' }
+      ];
+
+      const tabBar = `<div style='display:flex;border-bottom:2px solid var(--b1);background:#fff;position:sticky;top:0;z-index:10'>
+        ${tabs.map(t => `<button onclick="STATE.commTab='${t.key}';R()" style='flex:1;padding:10px 4px 8px;border:none;background:none;cursor:pointer;font-size:10px;font-weight:800;color:${tab===t.key?'var(--g)':'var(--t3)'};border-bottom:2px solid ${tab===t.key?'var(--g)':'transparent'};margin-bottom:-2px;display:flex;flex-direction:column;align-items:center;gap:2px;text-transform:uppercase;letter-spacing:.4px'>
+          <span style='font-size:20px'>${t.icon}</span>${t.label}
+        </button>`).join('')}
+      </div>`;
+
+      let content = '';
+      if (tab === 'gameday') content = renderCommGameDay(l);
+      else if (tab === 'teams') content = renderCommTeams(l);
+      else if (tab === 'league') content = renderCommLeague(l, standings);
+      else if (tab === 'draft') content = renderCommDraft(l);
+
+      return `<div style='min-height:100vh;background:var(--f4)'>
+        <div style='background:var(--n2);padding:14px 18px;display:flex;align-items:center;gap:14px'>
+          <div style='flex:1'>
+            <div style='font-size:9px;font-weight:800;color:rgba(255,255,255,.4);letter-spacing:1.4px;text-transform:uppercase'>Commissioner Tools</div>
+            <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:22px;color:#fff;line-height:1.1'>${l.name}</div>
+          </div>
+          <div style='text-align:right'>
+            <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:22px;color:#fff'>${pct}%</div>
+            <div style='font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px'>Done · Day ${currentDay}</div>
+          </div>
+        </div>
+        ${tabBar}
+        <div style='padding:16px'>${content}</div>
+        ${STATE.modal ? renderModal() : ''}
+      </div>`;
+    }
     
     function confirmRegenerateSchedule() {
       const hasScores = STATE.league.games.some(g => g.status === 'final' || g.status === 'live');
