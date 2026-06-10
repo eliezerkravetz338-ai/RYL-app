@@ -4996,8 +4996,7 @@
       if (STATE.rosterFocus) {
         const t = l.teams.find(x => x.id === STATE.rosterFocus);
         if (!t) { STATE.rosterFocus = null; R(); return ''; }
-        const ps = l.players.filter(p => p.teamId === t.id);
-        const rec = calcRec(t.id, l.games);
+        const ps = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
         const streak = getStreak(t.id, l.games);
         const hotStreak = streak.count >= 3 && streak.type === 'W';
         const coldStreak = streak.count >= 3 && streak.type === 'L';
@@ -5080,7 +5079,7 @@
         </div>
         <div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:14px 18px 18px'>
           ${l.teams.map(t => {
-            const ps = l.players.filter(p => p.teamId === t.id);
+            const ps = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
             const rec = calcRec(t.id, l.games);
             const streak = getStreak(t.id, l.games);
             const streakIcon = streak.count >= 3 && streak.type === 'W' ? '🔥' : streak.count >= 3 && streak.type === 'L' ? '❄️' : '';
@@ -5947,7 +5946,7 @@ async function assignCaptain(playerId, teamId) {
       const team = l.teams.find(t => t.id === teamId);
       if (!player || !team) return;
       l.teams = l.teams.map(t => t.id === teamId ? { ...t, captainId: playerId, captainName: player.name, cap: player.name } : t);
-      l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: true, captainTeamId: teamId } : p);
+      l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: true, captainTeamId: teamId, teamId: teamId } : p);
       await saveState();
       await sb.from('league_members').update({ role: 'captain', team_id: teamId })
         .eq('league_id', l.id).eq('user_id', player.userId || player.id);
@@ -6224,7 +6223,7 @@ async function assignCaptain(playerId, teamId) {
             ${matchupRows || `<div style='padding:16px;text-align:center;color:var(--t3);font-size:13px'>No games on this day</div>`}` : ''}`;
     
           // ── 3. ROSTERS & PLAYERS ──
-          const freeAgents = l.players.filter(p => !p.teamId);
+          const freeAgents = l.players.filter(p => !p.teamId && !l.teams.some(t => t.captainId === p.id));
           const captainCount = l.teams.filter(t => t.captainId).length;
           const totalTeams = l.teams.length;
           const allCaptainsSet = captainCount === totalTeams;
@@ -6266,7 +6265,7 @@ async function assignCaptain(playerId, teamId) {
               <button class='btn btn-p btn-sm' onclick='openAddPlayer()'>+ Add Player</button>
             </div>
             ${l.teams.map(t => {
-              const roster = l.players.filter(p => p.teamId === t.id);
+              const roster = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
               return `<div style='border-bottom:1px solid var(--b1)'>
                 <div style='display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--f4)'>
                   ${teamAvatar(t,'tm-av')}
