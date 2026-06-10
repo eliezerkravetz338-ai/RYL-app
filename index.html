@@ -5080,7 +5080,12 @@
           const l = STATE.league;
           const ds = l.draftState;
           const queue = STATE.myQueue || [];
-          const currentRound = Math.floor(ds.idx / l.teams.length) + 1;
+          const currentTid = (ds.status === 'active' || ds.status === 'paused') ? getPickTeam(ds, l.teams) : null;
+          const currentTeam = l.teams.find(t => t.id === currentTid);
+          const myLeagueTeam = l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); });
+          const myTeamId = myLeagueTeam?.id || STATE.memberTeamId;
+          const isMyTurn = STATE.memberRole === 'captain' && !!myTeamId && myTeamId === currentTid;
+          const isCapt = STATE.memberRole === 'captain';
           const totalRounds = Math.ceil(ds.total / l.teams.length);
           const recentPick = ds.picks.at(-1);
           const recentTeam = recentPick ? l.teams.find(t => t.id === recentPick.tid) : null;
@@ -5232,6 +5237,7 @@
         return `<div class='ph'><div class='ph-title'>Draft Room</div><div class='ph-sub'>Get the board ready, then start the draft from Commissioner.</div></div><div class='empty-s'><h3>Draft not started</h3><p>Start the draft from the Commissioner tab when captains are ready.</p></div>`;
       }
       const queue = STATE.myQueue || [];
+      const currentTid = (ds.status === 'active' || ds.status === 'paused') ? getPickTeam(ds, l.teams) : null;
       const currentTeam = l.teams.find(t => t.id === currentTid);
           const myLeagueTeam = l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); });
           const myTeamId = myLeagueTeam?.id || STATE.memberTeamId;
