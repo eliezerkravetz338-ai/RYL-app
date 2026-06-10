@@ -6146,6 +6146,29 @@ async function assignCaptain(playerId, teamId) {
         </div>`;
       }).join('');
 
+      const allTodayDone = todayGames.length > 0 && todayGames.every(g => g.status === 'final' || g.status === 'postponed');
+      const liveCount = todayGames.filter(g => g.status === 'live').length;
+      const needsScoringCount = todayGames.filter(g => g.status !== 'final' && g.status !== 'postponed').length;
+      const isLastDay = currentDay >= sd.length;
+
+      const statusSignal = allTodayDone && todayGames.length
+        ? `<div style='background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px'>
+            <div>
+              <div style='font-size:13px;font-weight:800;color:#15803d'>✅ Day ${currentDay} complete!</div>
+              <div style='font-size:11px;color:#16a34a;margin-top:2px'>${isLastDay ? 'All game days finished.' : `Ready to advance to Day ${currentDay + 1}.`}</div>
+            </div>
+            ${!isLastDay ? `<button class='btn btn-p btn-sm' onclick='commissionerAdvanceDay()'>Day ${currentDay + 1} →</button>` : `<button class='btn btn-o btn-sm' onclick="STATE.commTab='league';R()">🏆 Playoffs</button>`}
+          </div>`
+        : liveCount
+        ? `<div style='background:rgba(239,68,68,.06);border:1.5px solid rgba(239,68,68,.3);border-radius:12px;padding:12px 16px;margin-bottom:12px'>
+            <div style='font-size:13px;font-weight:800;color:var(--red)'>🔴 ${liveCount} game${liveCount!==1?'s':''} live right now</div>
+          </div>`
+        : needsScoringCount
+        ? `<div style='background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:12px'>
+            <div style='font-size:13px;font-weight:800;color:#b45309'>⏱ ${needsScoringCount} game${needsScoringCount!==1?'s':''} need scoring</div>
+          </div>`
+        : '';
+
       return `
         <!-- TODAY -->
         <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px'>
@@ -6158,6 +6181,8 @@ async function assignCaptain(playerId, teamId) {
             <button class='btn btn-o btn-sm' onclick='commissionerAdvanceDay()'>Next →</button>
           </div>
         </div>
+
+        ${statusSignal}
 
         ${todayGames.length ? todayGames.map(g => gameRow(g)).join('') : `<div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:20px;text-align:center;color:var(--t3);margin-bottom:8px'>No games on Day ${currentDay}</div>`}
 
@@ -6194,7 +6219,7 @@ async function assignCaptain(playerId, teamId) {
             </div>
             <div style='padding:12px 14px;border-bottom:1px solid var(--b1);display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end'>
               <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Time</label><input class='fi' type='time' value='${to24(selDay.time||"14:00")}' onchange="STATE.league.gameDays=STATE.league.gameDays.map(d=>d.num===${selDay.num}?{...d,time:from24(this.value)}:d);R()"></div>
-              <div style='flex:2;min-width:160px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Courts</label><input class='fi' value='${(selDay.courts||[]).join(", ")}' onchange="STATE.league.gameDays=STATE.league.gameDays.map(d=>d.num===${selDay.num}?{...d,courts:this.value.split(',').map(c=>c.trim()).filter(Boolean)}:d);R()"></div>
+              <div style='flex:2;min-width:160px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:flex;align-items:center;justify-content:space-between;margin-bottom:4px'>Courts <button onclick="STATE.commTab='league';R()" style='font-size:10px;font-weight:700;color:var(--g);background:none;border:none;cursor:pointer'>Edit ⚙️</button></label><input class='fi' value='${(selDay.courts||[]).join(", ")}' onchange="STATE.league.gameDays=STATE.league.gameDays.map(d=>d.num===${selDay.num}?{...d,courts:this.value.split(',').map(c=>c.trim()).filter(Boolean)}:d);R()"></div>
               <button class='btn btn-p btn-sm' onclick='applyDayTime(${selDay.num})'>Apply</button>
             </div>
             <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;padding:10px 14px 4px'>Matchups</div>
@@ -6231,29 +6256,34 @@ async function assignCaptain(playerId, teamId) {
         ${l.teams.map(t => {
           const roster = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
           const captain = t.captainId ? l.players.find(p => p.id === t.captainId) : null;
-          return `<div style='background:#fff;border:1.5px solid var(--b1);border-radius:12px;overflow:hidden;margin-bottom:10px'>
-            <div style='display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--f4);border-bottom:1px solid var(--b1)'>
+          const needsCaptain = !captain;
+          const ratedPlayers = roster.filter(p => p.skill);
+          const avgSkill = ratedPlayers.length ? (ratedPlayers.reduce((s,p) => s + (p.skill||0), 0) / ratedPlayers.length).toFixed(1) : null;
+          return `<div style='background:#fff;border:1.5px solid ${needsCaptain ? 'rgba(245,158,11,.5)' : 'var(--b1)'};border-radius:12px;overflow:hidden;margin-bottom:10px'>
+            <div style='display:flex;align-items:center;gap:10px;padding:12px 14px;background:${needsCaptain ? 'rgba(245,158,11,.06)' : 'var(--f4)'};border-bottom:1px solid var(--b1)'>
               ${teamAvatar(t, 'tm-av')}
               <div style='flex:1;min-width:0'>
                 <div style='font-size:14px;font-weight:800;color:var(--t1)'>${t.name}</div>
-                <div style='font-size:11px;color:var(--t3)'>${captain ? `Captain: ${captain.name}` : 'No captain assigned'} · ${roster.length} player${roster.length!==1?'s':''}</div>
+                <div style='font-size:11px;color:${needsCaptain ? '#b45309' : 'var(--t3)'}'>${needsCaptain ? '⚡ No captain assigned' : `Captain: ${captain.name}`} · ${roster.length} player${roster.length!==1?'s':''}</div>
               </div>
+              ${avgSkill ? `<div style='text-align:right;flex-shrink:0'><div style='font-size:14px;font-weight:800;color:#16a34a'>★${avgSkill}</div><div style='font-size:9px;color:var(--t3);text-transform:uppercase'>Avg</div></div>` : ''}
             </div>
             ${roster.map(p => {
               const isCap = t.captainId === p.id;
               return `<div style='display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--b1)'>
                 <span style='font-size:13px;font-weight:${isCap?700:500};color:var(--t1);flex:1'>${p.name}${isCap?` <span style='font-size:9px;font-weight:800;background:var(--gm);color:var(--gd);border-radius:4px;padding:1px 5px'>CAP</span>`:''}</span>
-                ${p.skill ? `<span style='font-size:11px;color:#16a34a;font-weight:700'>★${p.skill}</span>` : ''}
+                ${p.skill ? `<span style='font-size:12px;color:#16a34a;font-weight:700;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:2px 8px'>★${p.skill}</span>` : `<span style='font-size:10px;color:#cbd5e1'>Unrated</span>`}
                 ${isCap
-                  ? `<button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='removeCaptain("${p.id}")'>Remove Cap</button>`
+                  ? `<button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='removeCaptain("${p.id}")'>Remove</button>`
                   : `<button class='btn btn-o btn-xs' onclick='openMovePlayer("${p.id}")'>Move</button>`}
               </div>`;
             }).join('')}
-            ${!captain ? `<div style='padding:10px 14px;background:rgba(245,158,11,.04)'>
+            ${needsCaptain ? `<div style='padding:12px 14px;background:rgba(245,158,11,.04);display:flex;align-items:center;gap:8px'>
+              <span style='font-size:12px;color:#b45309;font-weight:700'>Assign captain:</span>
               ${l.players.filter(pl => !pl.isCaptain && !l.teams.some(tt => tt.captainId === pl.id)).length
-                ? `<select id='cap-sel-${t.id}' class='fi' style='display:inline-block;width:auto;margin-right:8px'><option value=''>Pick captain...</option>${l.players.filter(pl => !pl.isCaptain && !l.teams.some(tt => tt.captainId === pl.id)).map(pl=>`<option value='${pl.id}'>${pl.name}</option>`).join('')}</select>
+                ? `<select id='cap-sel-${t.id}' class='fi' style='display:inline-block;flex:1;min-width:0'><option value=''>Pick a player...</option>${l.players.filter(pl => !pl.isCaptain && !l.teams.some(tt => tt.captainId === pl.id)).map(pl=>`<option value='${pl.id}'>${pl.name}</option>`).join('')}</select>
                    <button class='btn btn-p btn-sm' onclick="const v=document.getElementById('cap-sel-${t.id}').value;if(v)assignCaptain(v,'${t.id}')">Assign</button>`
-                : `<span style='font-size:12px;color:var(--t3)'>All players are assigned as captains</span>`}
+                : `<span style='font-size:12px;color:var(--t3)'>No unassigned players available</span>`}
             </div>` : ''}
           </div>`;
         }).join('')}
@@ -6467,6 +6497,33 @@ async function assignCaptain(playerId, teamId) {
 
     function renderCommDraft(l) {
       const ds = l.draftState;
+      const draftDone = l.status === 'season' || l.status === 'playoffs' || l.status === 'complete';
+
+      // Post-season: show compact recap only
+      if (draftDone && ds) {
+        return `
+          <div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px'>
+            <div style='font-size:28px'>✅</div>
+            <div>
+              <div style='font-size:14px;font-weight:800;color:#15803d'>Draft Complete</div>
+              <div style='font-size:12px;color:#16a34a'>${ds.picks?.length||0} picks · ${l.teams.length} teams</div>
+            </div>
+            <div style='margin-left:auto'><button class='btn btn-o btn-sm' style='color:var(--red);border-color:var(--red)' onclick='resetDraftBoard()'>Reset</button></div>
+          </div>
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Draft Picks</div>
+          <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;overflow:hidden'>
+            ${ds.picks.map((pk, i) => {
+              const t = l.teams.find(x => x.id === pk.tid);
+              return `<div style='display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--b1)'>
+                <span style='font-size:11px;font-weight:700;color:var(--t3);min-width:32px'>#${pk.num}</span>
+                ${t ? teamAvatar(t, 'tm-av') : ''}
+                <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1'>${pk.pn}</span>
+                <span style='font-size:11px;color:var(--t3)'>${t?.name||'?'}</span>
+              </div>`;
+            }).join('')}
+          </div>`;
+      }
+
       return `
         <!-- DRAFT STATUS -->
         <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Draft Status</div>
@@ -6481,7 +6538,7 @@ async function assignCaptain(playerId, teamId) {
               <div style='font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase'>Total Picks</div>
             </div>
             <div style='background:var(--f4);border-radius:10px;padding:10px;text-align:center'>
-              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:var(--g)'>${ds.status}</div>
+              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:var(--g);font-size:14px'>${ds.status}</div>
               <div style='font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase'>Status</div>
             </div>
           </div>` : `<div style='text-align:center;padding:10px 0 4px;font-size:13px;color:var(--t3)'>Draft has not started yet</div>`}
@@ -6538,11 +6595,12 @@ async function assignCaptain(playerId, teamId) {
       const pct = totalGames ? Math.round((finalGamesCount/totalGames)*100) : 0;
       const currentDay = l.currentDayGameNum || 1;
 
+      const draftDone = l.status === 'season' || l.status === 'playoffs' || l.status === 'complete';
       const tabs = [
         { key: 'gameday', icon: '🏀', label: 'Game Day' },
         { key: 'teams', icon: '👥', label: 'Teams' },
         { key: 'league', icon: '⚙️', label: 'League' },
-        { key: 'draft', icon: '🎯', label: 'Draft' }
+        { key: 'draft', icon: draftDone ? '📋' : '🎯', label: draftDone ? 'Recap' : 'Draft' }
       ];
 
       const tabBar = `<div style='display:flex;border-bottom:2px solid var(--b1);background:#fff;position:sticky;top:0;z-index:10'>
