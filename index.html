@@ -2677,11 +2677,15 @@
     function applyDayTime(dayNum) {
       const l = STATE.league;
       const gd = l.gameDays?.find(d => d.num === dayNum);
-      if (!gd || !gd.time) return;
-      // Apply this day's time to every game on that day
-      STATE.league.games = l.games.map(g =>
-        g.gameNum === dayNum ? { ...g, time: gd.time } : g
-      );
+      if (!gd) return;
+      const courts = (gd.courts || []).filter(Boolean);
+      STATE.league.games = l.games.map((g, idx) => {
+        if (g.gameNum !== dayNum) return g;
+        const dayGames = l.games.filter(x => x.gameNum === dayNum);
+        const gameIdx = dayGames.findIndex(x => x.id === g.id);
+        const court = courts.length ? courts[gameIdx % courts.length] : g.court;
+        return { ...g, time: gd.time || g.time, court };
+      });
       saveState();
       R();
     }
