@@ -4914,7 +4914,11 @@
           actions = ''; // No actions for uninvolved users
         } else if (!isComm && isMyGame) {
           // Captain for own game — limited actions only
-          if (isLive) {
+          if (isUpcoming) {
+            actions = `<div style='display:flex;gap:6px;padding:10px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
+              <button onclick='startGame("${g.id}")' style='padding:6px 16px;border-radius:8px;background:#16a34a;color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer'>▶ Start Game</button>
+            </div>`;
+          } else if (isLive) {
             actions = `<div style='display:flex;gap:6px;padding:10px 16px;border-top:1px solid #f1f5f9;justify-content:flex-end'>
               <button onclick='scoreGame("${g.id}")' style='padding:6px 14px;border-radius:8px;background:#f1f5f9;color:#374151;border:1px solid #e2e8f0;font-size:12px;font-weight:600;cursor:pointer'>✏️ Edit</button>
               <button onclick='endGame("${g.id}")' style='padding:6px 16px;border-radius:8px;background:#111;color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer'>■ End Game</button>
