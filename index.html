@@ -5087,6 +5087,7 @@
           const isMyTurn = STATE.memberRole === 'captain' && !!myTeamId && myTeamId === currentTid;
           const isCapt = STATE.memberRole === 'captain';
           const currentRound = Math.floor(ds.idx / l.teams.length) + 1;
+          const totalRounds = Math.ceil(ds.total / l.teams.length);
           const recentPick = ds.picks.at(-1);
           const recentTeam = recentPick ? l.teams.find(t => t.id === recentPick.tid) : null;
           const search = (STATE.searchDraft || '').toLowerCase();
