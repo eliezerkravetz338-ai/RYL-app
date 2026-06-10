@@ -5086,7 +5086,7 @@
           const myTeamId = myLeagueTeam?.id || STATE.memberTeamId;
           const isMyTurn = STATE.memberRole === 'captain' && !!myTeamId && myTeamId === currentTid;
           const isCapt = STATE.memberRole === 'captain';
-          const totalRounds = Math.ceil(ds.total / l.teams.length);
+          const currentRound = Math.floor(ds.idx / l.teams.length) + 1;
           const recentPick = ds.picks.at(-1);
           const recentTeam = recentPick ? l.teams.find(t => t.id === recentPick.tid) : null;
           const search = (STATE.searchDraft || '').toLowerCase();
@@ -7549,7 +7549,6 @@ async function assignCaptain(playerId, teamId) {
       } catch (err) {
         console.error('RYL render error:', err.message, err.stack);
         if (STATE.screen === 'wizard') {
-          // Don't wipe state during wizard — show the error instead
           document.getElementById('app').innerHTML = `<div style='padding:40px 20px;max-width:500px;margin:0 auto'>
             <div style='background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:20px'>
               <div style='font-size:16px;font-weight:800;color:#dc2626;margin-bottom:8px'>Wizard error — step ${STATE.wizStep}</div>
@@ -7558,10 +7557,14 @@ async function assignCaptain(playerId, teamId) {
             </div>
           </div>`;
         } else {
-          clearSavedState();
-          STATE.screen = 'landing';
-          STATE.league = null;
-          document.getElementById('app').innerHTML = renderLanding();
+          // Never wipe state — show a dismissable error overlay instead
+          document.body.insertAdjacentHTML('beforeend', `<div id='ryl-err' style='position:fixed;bottom:16px;left:16px;right:16px;z-index:9999;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px;box-shadow:0 4px 20px rgba(0,0,0,.15)'>
+            <div style='font-size:12px;font-weight:700;color:#dc2626;margin-bottom:6px'>${err.message}</div>
+            <div style='display:flex;gap:8px'>
+              <button onclick="document.getElementById('ryl-err').remove()" style='padding:5px 12px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer'>Dismiss</button>
+              <button onclick="location.reload()" style='padding:5px 12px;background:#f1f5f9;color:#374151;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer'>Reload</button>
+            </div>
+          </div>`);
         }
       }
     }
@@ -7570,10 +7573,12 @@ async function assignCaptain(playerId, teamId) {
       try {
         document.getElementById('app').innerHTML = renderApp();
       } catch (err) {
-        console.error('RYL render error:', err);
-        STATE.screen = 'landing';
-        STATE.league = null;
-        document.getElementById('app').innerHTML = renderLanding();
+        console.error('renderOnly error:', err.message, err.stack);
+        // Never wipe state — show a floating error message
+        document.body.insertAdjacentHTML('beforeend', `<div id='ryl-err' style='position:fixed;bottom:16px;left:16px;right:16px;z-index:9999;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px;box-shadow:0 4px 20px rgba(0,0,0,.15)'>
+          <div style='font-size:12px;font-weight:700;color:#dc2626;margin-bottom:6px'>${err.message}</div>
+          <button onclick="document.getElementById('ryl-err').remove()" style='padding:5px 12px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer'>Dismiss</button>
+        </div>`);
       }
     }
 
