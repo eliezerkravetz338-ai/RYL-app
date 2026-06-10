@@ -2435,6 +2435,7 @@
       const newName = cleanCourtName(value, index);
       STATE.league.courts[index] = newName;
       STATE.league.gameDays.forEach(g => g.courts = (g.courts || []).map(c => c === oldName ? newName : c));
+      STATE.league.games.forEach(g => { if (g.court === oldName) g.court = newName; });
       R();
     }
     function removeScheduleCourt(index) {
@@ -2446,6 +2447,7 @@
         g.courts = (g.courts || []).filter(c => c !== oldName && STATE.league.courts.includes(c));
         if (!g.courts.length) g.courts = [fallback];
       });
+      STATE.league.games.forEach(g => { if (g.court === oldName) g.court = fallback; });
       R();
     }
     function toggleCourtForGame(gameIndex, courtName) {
