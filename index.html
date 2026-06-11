@@ -5392,6 +5392,15 @@
       `;
     }
 
+    function canScorePlayoffGame(g) {
+      const l = STATE.league;
+      if (!l) return false;
+      const role = STATE.memberRole;
+      if (role !== 'captain' && role !== 'player') return true; // commissioner
+      const myTeamId = STATE.memberTeamId || l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); })?.id;
+      return !!(myTeamId && (g.home === myTeamId || g.away === myTeamId));
+    }
+
     function renderPlayoffHome() {
       const l  = STATE.league;
       const pc = l.playoffConfig;
@@ -5552,7 +5561,7 @@
                     ${isLive ? `<div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:20px;color:#dc2626;margin-top:4px'>${g.hs ?? 0} – ${g.as ?? 0}</div>` : ''}
                     ${!isLive && (g.time || g.court) ? `<div style='font-size:10px;color:var(--t3);margin-top:2px'>${[g.time,g.court].filter(Boolean).join(' · ')}</div>` : ''}
                   </div>
-                  <button class='btn ${isLive?"btn-p":"btn-o"} btn-xs' onclick='scorePlayoffGame(${g.ri},${g.gi})'>${isLive?"Update":"Score"}</button>
+                  ${canScorePlayoffGame(g) ? `<button class='btn ${isLive?"btn-p":"btn-o"} btn-xs' onclick='scorePlayoffGame(${g.ri},${g.gi})'>${isLive?"Update":"Score"}</button>` : ''}
                 </div>`;
               }).join('') : `<div style='padding:20px;text-align:center;font-size:12px;color:var(--t3)'>${champion ? "Season complete!" : "All games scheduled"}</div>`}
             </div>
@@ -5739,7 +5748,7 @@
 
         // Actions
         let actions = '';
-        if (!canScoreGame(g)) {
+        if (!canScorePlayoffGame(g)) {
           actions = ''; // captains only see actions for their own games
         } else if (isFinal) {
           actions = `<div style='padding:8px 16px;border-top:1px solid #f1f5f9;display:flex;justify-content:flex-end'>
@@ -5829,7 +5838,6 @@
       const isBest3League = pc.format === 'best3';
       const isComm = STATE.memberRole !== 'captain' && STATE.memberRole !== 'player';
       const myTeamId = STATE.memberTeamId || l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); })?.id;
-      const canScoreGame = (g) => isComm || (myTeamId && (g.home === myTeamId || g.away === myTeamId));
 
       // Build one matchup card exactly like ESPN
       function matchupCard(g) {
