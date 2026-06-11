@@ -6681,7 +6681,10 @@ async function assignCaptain(playerId, teamId) {
           </div>
 
           <!-- TEAMS WITH CAPTAIN ASSIGNMENT -->
-          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Teams</div>
+          <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px'>
+            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Teams</div>
+            <button class='btn btn-p btn-sm' onclick='openAddPlayer()'>+ Add Player</button>
+          </div>
           ${l.teams.map(t => {
             const captain = t.captainId ? l.players.find(p => p.id === t.captainId) : null;
             const needsCaptain = !captain;
