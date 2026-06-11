@@ -3340,11 +3340,13 @@
     function renderCaptainNav() {
       const l = STATE.league;
       const myTeam = l.teams.find(t => t.id === STATE.memberTeamId);
+      const isPlayoffs = l.status === 'playoffs' || l.status === 'complete';
       const tabs = [
         { k: 'home', lb: 'My Team' },
         { k: 'standings', lb: 'Standings' },
         { k: 'schedule', lb: 'Schedule' },
         { k: 'rosters', lb: 'Rosters' },
+        ...(isPlayoffs ? [{ k: 'playoffs', lb: '🏆 Playoffs' }] : []),
       ];
       return `<div class='nav' style='position:sticky;top:0;z-index:20'>
         <div style='display:flex;align-items:center;gap:8px;flex:1;min-width:0'>
@@ -3363,11 +3365,13 @@
       const l = STATE.league;
       const myPlayer = l.players.find(p => p.userId === STATE.user?.id || p.id === STATE.user?.id);
       const myTeam = myPlayer?.teamId ? l.teams.find(t => t.id === myPlayer.teamId) : null;
+      const isPlayoffs = l.status === 'playoffs' || l.status === 'complete';
       const tabs = [
         { k: 'home', lb: 'Home' },
         { k: 'standings', lb: 'Standings' },
         { k: 'schedule', lb: 'Schedule' },
         { k: 'rosters', lb: 'Rosters' },
+        ...(isPlayoffs ? [{ k: 'playoffs', lb: '🏆 Playoffs' }] : []),
       ];
       return `<div class='nav' style='position:sticky;top:0;z-index:20'>
         <div style='display:flex;align-items:center;gap:8px;flex:1;min-width:0'>
@@ -7586,6 +7590,7 @@ async function assignCaptain(playerId, teamId) {
           if (STATE.appTab === 'standings') return renderCaptainNav() + renderStandings() + captainModal;
           if (STATE.appTab === 'schedule') return renderCaptainNav() + renderSchedule() + captainModal;
           if (STATE.appTab === 'rosters') return renderCaptainNav() + renderRosters() + captainModal;
+          if (STATE.appTab === 'playoffs') return renderCaptainNav() + renderPlayoffs() + captainModal;
           return renderCaptainNav() + (captainDraftDone ? renderMemberSeasonHome() : renderCaptainHome()) + captainModal;
         }
         if (STATE.memberRole === 'player') {
@@ -7599,6 +7604,7 @@ async function assignCaptain(playerId, teamId) {
           if (STATE.appTab === 'standings') return playerNav + renderStandings() + playerModal;
           if (STATE.appTab === 'schedule') return playerNav + renderSchedule() + playerModal;
           if (STATE.appTab === 'rosters') return playerNav + renderRosters() + playerModal;
+          if (STATE.appTab === 'playoffs') return playerNav + renderPlayoffs() + playerModal;
           return playerNav + renderMemberSeasonHome() + playerModal;
         }
       } if (STATE.screen === 'myleagues') return renderMyLeagues(); if (STATE.screen === 'landing') return renderLanding(); if (STATE.screen === 'wizard') return renderWizard(); if (STATE.screen === 'join') return renderJoin(); if (STATE.screen === 'app') return renderMainApp(); return renderMyLeagues(); }
