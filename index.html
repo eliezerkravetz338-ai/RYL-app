@@ -5739,7 +5739,9 @@
 
         // Actions
         let actions = '';
-        if (isFinal) {
+        if (!canScoreGame(g)) {
+          actions = ''; // captains only see actions for their own games
+        } else if (isFinal) {
           actions = `<div style='padding:8px 16px;border-top:1px solid #f1f5f9;display:flex;justify-content:flex-end'>
             <button onclick='scorePlayoffGame(${ri},${gi})' style='padding:5px 12px;border-radius:7px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:12px;font-weight:600;color:#374151;cursor:pointer'>✏️ Edit</button>
           </div>`;
@@ -5749,7 +5751,6 @@
             <button onclick='endPlayoffGame(${ri},${gi})' style='padding:6px 16px;border-radius:8px;background:#111;color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer'>■ End Game</button>
           </div>`;
         } else if (isActive) {
-          // Series in progress but no game currently live — show next game button
           actions = `<div style='padding:10px 16px;border-top:1px solid #f1f5f9;display:flex;justify-content:flex-end'>
             <button onclick='startPlayoffGame(${ri},${gi})' style='padding:6px 16px;border-radius:8px;background:#16a34a;color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer'>▶ Start Game ${gameNum}</button>
           </div>`;
@@ -5826,6 +5827,9 @@
       const identity = champion ? smartTeamIdentity(champion) : null;
       const seedMap = getPlayoffSeedMap(pc.bracket);
       const isBest3League = pc.format === 'best3';
+      const isComm = STATE.memberRole !== 'captain' && STATE.memberRole !== 'player';
+      const myTeamId = STATE.memberTeamId || l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); })?.id;
+      const canScoreGame = (g) => isComm || (myTeamId && (g.home === myTeamId || g.away === myTeamId));
 
       // Build one matchup card exactly like ESPN
       function matchupCard(g) {
@@ -5856,7 +5860,7 @@
           const winnerTeam = l.teams.find(t => t.id === seriesWinnerId);
           const wW = isBest3Game ? Math.max(sWinsH, sWinsA) : '';
           const lW = isBest3Game ? Math.min(sWinsH, sWinsA) : '';
-          statusLine = `<div style='padding:5px 12px;font-size:11px;font-weight:700;color:#1d4ed8'>${winnerTeam?.name||''} wins${isBest3Game ? ` series ${wW}-${lW}` : ''}</div>`;
+          statusLine = `<div style='padding:5px 12px;font-size:11px;font-weight:800;color:#d97706;background:rgba(245,158,11,.06)'>🏆 ${winnerTeam?.name||''} wins${isBest3Game ? ` series ${wW}-${lW}` : ''}</div>`;
         } else if (isBest3Game && gPlayedCount > 0 && !isFinal) {
           const leadText = sWinsH === sWinsA
             ? `Game ${gPlayedCount+1}, Series tied ${sWinsH}-${sWinsA}`
@@ -5893,7 +5897,7 @@
         const homeWon = isFinal && g.winner === g.home;
         const awayWon = isFinal && g.winner === g.away;
 
-        return `<div style='background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:10px;min-width:180px'>
+        return `<div style='background:#fff;border:1.5px solid ${g.status==='live'?'#f59e0b':g.status==='final'?'#e2e8f0':'#e2e8f0'};border-radius:12px;overflow:hidden;box-shadow:${g.status==='live'?'0 0 0 2px rgba(245,158,11,.2)':'0 1px 4px rgba(0,0,0,.06)'};margin-bottom:10px;min-width:180px'>
           ${statusLine}
           ${teamRow(home, hSeed, homeWon, awayWon, g.hs)}
           ${teamRow(away, aSeed, awayWon, homeWon, g.as)}
@@ -5903,8 +5907,9 @@
       // Build rounds as columns
       const roundCols = pc.bracket.map((round, ri) => {
         const cards = round.games.map(g => matchupCard(g)).join('');
+        const isChampRound = ri === pc.bracket.length - 1;
         return `<div style='flex:1;min-width:190px;max-width:260px'>
-          <div style='font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;text-align:center'>${round.name}</div>
+          <div style='font-size:10px;font-weight:900;color:${isChampRound ? '#f59e0b' : 'rgba(245,158,11,.6)'};text-transform:uppercase;letter-spacing:1.4px;margin-bottom:10px;text-align:center;padding:6px 8px;background:rgba(245,158,11,.06);border-radius:6px'>${isChampRound ? '🏆 ' : ''}${round.name}</div>
           <div style='display:flex;flex-direction:column;justify-content:space-around;height:100%'>${cards}</div>
         </div>`;
       });
@@ -6147,6 +6152,15 @@ async function assignCaptain(playerId, teamId) {
         </div>`;
       }).join('');
 
+      const seasonNum = ((l.seasonHistory||[]).length) + 1;
+      const season2Banner = STATE.season2Started ? `<div style='background:linear-gradient(135deg,#052e16,#14532d);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px'>
+        <div>
+          <div style='font-size:10px;font-weight:800;color:rgba(74,222,128,.7);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px'>Season ${seasonNum} Started</div>
+          <div style='font-size:14px;font-weight:800;color:#fff'>${l.status==='lobby'?'Draft to begin the season →':'Season is live — schedule your first game day →'}</div>
+        </div>
+        <button onclick="STATE.season2Started=false;R()" style='background:none;border:none;color:rgba(255,255,255,.4);font-size:18px;cursor:pointer'>×</button>
+      </div>` : '';
+
       const allTodayDone = todayGames.length > 0 && todayGames.every(g => g.status === 'final' || g.status === 'postponed');
       const liveCount = todayGames.filter(g => g.status === 'live').length;
       const needsScoringCount = todayGames.filter(g => g.status !== 'final' && g.status !== 'postponed').length;
@@ -6171,6 +6185,7 @@ async function assignCaptain(playerId, teamId) {
         : '';
 
       return `
+        ${season2Banner}
         <!-- TODAY -->
         <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px'>
           <div>
@@ -6473,10 +6488,17 @@ async function assignCaptain(playerId, teamId) {
                 </div>
               </div>`).join('')}
             </div>
-            <button class='btn btn-p btn-sm' style='width:100%' onclick='setupAndActivatePlayoffs()'>🏆 Generate & Activate Playoffs</button>
+            ${pc?.bracket 
+              ? `<div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px'>
+                  <div>
+                    <div style='font-size:13px;font-weight:800;color:#15803d'>🏆 Playoffs Active</div>
+                    <div style='font-size:11px;color:#16a34a;margin-top:2px'>Bracket is live — teams are competing</div>
+                  </div>
+                  <button onclick="openModal('Regenerate Bracket?','<p style=\\'font-size:13px;color:var(--t2);line-height:1.6\\'>This will reset all playoff scores and start fresh. This cannot be undone.</p>','<button class=\\'btn btn-gh btn-sm\\' onclick=\\'closeModal()\\'>Cancel</button><button class=\\'btn btn-o btn-sm\\' style=\\'color:var(--red);border-color:var(--red)\\' onclick=\\'closeModal();STATE.league.playoffConfig={...STATE.league.playoffConfig,bracket:null};R()\\'>Reset Bracket</button>')" style='padding:6px 14px;border-radius:8px;font-size:11px;font-weight:700;color:var(--red);background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);cursor:pointer'>↺ Reset</button>
+                </div>`
+              : `<button class='btn btn-p btn-sm' style='width:100%' onclick='setupAndActivatePlayoffs()'>🏆 Generate & Activate Playoffs</button>`}
             <div style='margin-top:10px;text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap'>
               <button class='btn btn-gh btn-sm' style='color:var(--t3)' onclick='skipPlayoffsEndSeason()'>Skip Playoffs — End Season</button>
-              ${pc?.bracket?`<button class='btn btn-gh btn-sm' onclick="STATE.league.playoffConfig={...STATE.league.playoffConfig,bracket:null};R()">↺ Regenerate Bracket</button>`:''}
             </div>
           </div>
           ${pc?.bracket && bracketRows ? `<div style='border-top:1px solid var(--b1)'>
@@ -7275,8 +7297,9 @@ async function assignCaptain(playerId, teamId) {
       STATE.showChampCard  = false;
       STATE.showNextSeason = false;
       STATE.s2KeepRosters  = undefined;
-      STATE.appTab         = keepRosters ? 'home' : 'commissioner';
-      STATE.commTab        = 'league';
+      STATE.appTab         = 'commissioner';
+      STATE.commTab        = keepRosters ? 'gameday' : 'draft';
+      STATE.season2Started = true; // triggers a one-time welcome banner
 
       _saving = false; saveState();
       R();
