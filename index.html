@@ -4563,6 +4563,13 @@
       const playoffsSet = l.playoffConfig?.bracket;
 
       return `
+        ${STATE.season2Started ? `<div style='background:linear-gradient(135deg,#052e16,#14532d);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px'>
+          <div>
+            <div style='font-size:10px;font-weight:800;color:rgba(74,222,128,.7);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px'>🏀 Season ${((l.seasonHistory||[]).length)} Underway</div>
+            <div style='font-size:14px;font-weight:800;color:#fff'>Season is live — tap Schedule to start your first game</div>
+          </div>
+          <button onclick="STATE.season2Started=false;R()" style='background:none;border:none;color:rgba(255,255,255,.4);font-size:20px;cursor:pointer;flex-shrink:0'>×</button>
+        </div>` : ''}
         ${renderSeasonHomeHero(l, currentDay, liveGame, nextGame, allFinal)}
         ${allRegDone && !playoffsSet ? `
         <div style='margin:12px 18px 0;background:linear-gradient(135deg,#1a1100,#0c0900);border:1px solid rgba(245,158,11,.25);border-radius:var(--rx);padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px'>
@@ -6165,13 +6172,13 @@ async function assignCaptain(playerId, teamId) {
         </div>`;
       }).join('');
 
-      const seasonNum = ((l.seasonHistory||[]).length) + 1;
+      const seasonNum = ((l.seasonHistory||[]).length);
       const season2Banner = STATE.season2Started ? `<div style='background:linear-gradient(135deg,#052e16,#14532d);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px'>
         <div>
-          <div style='font-size:10px;font-weight:800;color:rgba(74,222,128,.7);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px'>Season ${seasonNum} Started</div>
-          <div style='font-size:14px;font-weight:800;color:#fff'>${l.status==='lobby'?'Draft to begin the season →':'Season is live — schedule your first game day →'}</div>
+          <div style='font-size:10px;font-weight:800;color:rgba(74,222,128,.7);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px'>🏀 Season ${seasonNum} Started</div>
+          <div style='font-size:14px;font-weight:800;color:#fff'>${l.status==='lobby'?'Go to Commissioner → Draft to begin':'First game day is ready — start a game when ready'}</div>
         </div>
-        <button onclick="STATE.season2Started=false;R()" style='background:none;border:none;color:rgba(255,255,255,.4);font-size:18px;cursor:pointer'>×</button>
+        <button onclick="STATE.season2Started=false;R()" style='background:none;border:none;color:rgba(255,255,255,.4);font-size:18px;cursor:pointer;flex-shrink:0'>×</button>
       </div>` : '';
 
       const allTodayDone = todayGames.length > 0 && todayGames.every(g => g.status === 'final' || g.status === 'postponed');
@@ -7257,11 +7264,11 @@ async function assignCaptain(playerId, teamId) {
       R();
     }
 
-    function startSeason2() {
+    async function startSeason2() {
       const l = STATE.league;
       const keepRosters = STATE.s2KeepRosters;
 
-      // Archive current season data onto the league
+      // Archive current season data
       if (!l.seasonHistory) l.seasonHistory = [];
       l.seasonHistory.push({
         season: (l.seasonHistory.length || 0) + 1,
@@ -7272,49 +7279,49 @@ async function assignCaptain(playerId, teamId) {
         trades: (l.tradeLog||[]).length,
       });
 
-      // Save game days template before reset (courts + times)
-      const savedGameDays = (l.gameDays||[]).map(gd => ({ ...gd, num: gd.num }));
+      // Save game days template (courts + times)
+      const savedGameDays = (l.gameDays||[]).map(gd => ({ ...gd }));
 
-      // Reset for new season
-      l.games         = [];
-      l.gameDays      = savedGameDays; // keep same schedule structure
-      l.draftState    = null;
-      l.playoffConfig = null;
-      l.status        = 'lobby';
-      l.seasonEntered = false;
-      l.currentDayGameNum = 1;
+      // Full reset
+      l.games              = [];
+      l.gameDays           = savedGameDays;
+      l.draftState         = null;
+      l.playoffConfig      = null;
+      l.seasonEntered      = false;
+      l.currentDayGameNum  = 1;
       l.lastCompletedDayGameNum = null;
-      l.gameOfDayByDay = {};
-      l.forfeitLog    = [];
-      l.tradeLog      = [];
+      l.gameOfDayByDay     = {};
+      l.forfeitLog         = [];
+      l.tradeLog           = [];
 
       // Handle rosters
       if (keepRosters) {
-        // Keep rosters — skip draft entirely, go straight to season
         l.status = 'season';
         l.seasonEntered = true;
         l.players = l.players.map(p => ({ ...p }));
       } else {
-        // Redraft — players back to pool
         l.players = l.players.map(p => ({ ...p, teamId: null }));
         l.status = 'lobby';
       }
 
-      // Auto-generate schedule using saved game days
+      // Build new schedule
       if (savedGameDays.length > 0) {
         l.games = buildSchedule(l);
       }
 
-      // Reset STATE
+      // Reset all STATE flags
       STATE.showRecap      = false;
       STATE.showChampCard  = false;
       STATE.showNextSeason = false;
       STATE.s2KeepRosters  = undefined;
-      STATE.appTab         = 'commissioner';
-      STATE.commTab        = keepRosters ? 'gameday' : 'draft';
-      STATE.season2Started = true; // triggers a one-time welcome banner
+      STATE.commSchedDay   = 1;
+      STATE.appTab         = 'home';
+      STATE.season2Started = true;
 
-      _saving = false; saveState();
+      // Save and wait for it to complete before rendering
+      // This prevents realtime from overwriting new state with old Season 1 data
+      _saving = false;
+      await saveState();
       R();
     }
 
