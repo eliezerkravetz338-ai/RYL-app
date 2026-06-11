@@ -6689,7 +6689,6 @@ async function assignCaptain(playerId, teamId) {
           <!-- TEAMS WITH CAPTAIN ASSIGNMENT -->
           <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px'>
             <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Teams</div>
-            <button class='btn btn-p btn-sm' onclick='openAddPlayer()'>+ Add Player</button>
           </div>
           ${l.teams.map(t => {
             const captain = t.captainId ? l.players.find(p => p.id === t.captainId) : null;
@@ -6713,16 +6712,22 @@ async function assignCaptain(playerId, teamId) {
             </div>`;
           }).join('')}
 
-          <!-- JOINED PLAYERS NOT YET ASSIGNED -->
-          ${joinedPlayers.length ? `
+          <!-- UNASSIGNED PLAYERS + ADD PLAYER -->
           <div style='margin-top:4px'>
-            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Joined — Not Yet Assigned (${joinedPlayers.length})</div>
-            ${joinedPlayers.map(p => `<div style='background:#fff;border:1px solid var(--b1);border-radius:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:6px'>
-              <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1'>${p.name}</span>
-              <select id='assign-${p.id}' class='fi' style='width:auto;margin:0;font-size:11px'><option value=''>Assign to team...</option>${l.teams.filter(t=>!t.captainId).map(t=>`<option value='${t.id}'>${t.name}</option>`).join('')}</select>
-              <button class='btn btn-p btn-xs' onclick="const v=document.getElementById('assign-${p.id}').value;if(v)assignCaptain('${p.id}',v)">Make Captain</button>
-            </div>`).join('')}
-          </div>` : ''}`;
+            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Player Pool</div>
+            ${(() => {
+              const unassigned = l.players.filter(p => !l.teams.some(t => t.captainId === p.id));
+              return unassigned.length ? unassigned.map(p => `<div style='background:#fff;border:1px solid var(--b1);border-radius:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:6px'>
+                <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1'>${p.name}</span>
+                <select id='assign2-${p.id}' class='fi' style='width:auto;margin:0;font-size:11px'><option value=''>Assign to team...</option>${l.teams.filter(t=>!t.captainId).map(t=>`<option value='${t.id}'>${t.name}</option>`).join('')}</select>
+                <button class='btn btn-p btn-xs' onclick="const v=document.getElementById('assign2-${p.id}').value;if(v)assignCaptain('${p.id}',v)">Make Captain</button>
+              </div>`).join('') : `<div style='font-size:12px;color:var(--t3);font-style:italic;padding:8px 0'>No unassigned players yet.</div>`;
+            })()}
+            <div style='display:flex;gap:8px;margin-top:10px'>
+              <input class='fi' id='lobbyAddPlayerInput' style='flex:1;margin:0' placeholder='Add player by name...' onkeydown="if(event.key==='Enter'){const v=this.value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});this.value='';R();}}">
+              <button class='btn btn-p btn-sm' onclick="const v=document.getElementById('lobbyAddPlayerInput').value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});document.getElementById('lobbyAddPlayerInput').value='';R();}">Add</button>
+            </div>
+          </div>`;
       }
 
       else if (lobbyTab === 'draft') {
@@ -6819,7 +6824,6 @@ async function assignCaptain(playerId, teamId) {
         </div>
         ${tabBar}
         <div style='padding:16px'>${content}</div>
-        ${STATE.modal ? renderModal() : ''}
       </div>`;
     }
 
