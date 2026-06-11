@@ -1738,6 +1738,7 @@
       signupName: '',                // signup display name
       myQueue: [],                   // personal draft queue — local only, never synced
       commTab: 'gameday',            // active commissioner tools tab
+      commLobbyTab: 'captains',      // active lobby commissioner tab
     };
 
     function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -2409,6 +2410,18 @@
     function moveQueueItem(index, dir) { const q = [...(STATE.myQueue || [])]; const ni = index + dir; if (index < 0 || ni < 0 || ni >= q.length) return; [q[index], q[ni]] = [q[ni], q[index]]; STATE.myQueue = q; R(); }
     function handleDraftSearchInput(el) { STATE.searchDraft = el.value; R(); setTimeout(() => { const inp = document.getElementById('draftSearch'); if (inp) { inp.focus(); const pos = STATE.searchDraft.length; try { inp.setSelectionRange(pos, pos); } catch (e) {} } }, 0); }
     function importPl() { const raw = document.getElementById('plImport')?.value || ''; const names = raw.split('\n').map(n => n.trim()).filter(Boolean); const ex = STATE.league.players.map(p => p.name.toLowerCase()); names.forEach(n => { if (!ex.includes(n.toLowerCase())) STATE.league.players.push({ id: uid(), name: n, teamId: null }); }); const el = document.getElementById('plImport'); if (el) el.value = ''; R(); }
+
+    function openAddPlayer() {
+      openModal('Add Player',
+        `<div class='fg' style='margin-bottom:0'>
+          <label class='fl'>Player Name</label>
+          <input class='fi' id='addPlayerName' placeholder='e.g. Alex Johnson' onkeydown="if(event.key==='Enter')document.getElementById('addPlayerBtn').click()">
+        </div>`,
+        `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Cancel</button>
+         <button id='addPlayerBtn' class='btn btn-p btn-sm' onclick="const n=document.getElementById('addPlayerName')?.value?.trim();if(!n)return;STATE.league.players.push({id:uid(),name:n,teamId:null});closeModal();">Add Player</button>`
+      );
+      setTimeout(() => document.getElementById('addPlayerName')?.focus(), 100);
+    }
     function loadDemoPlayers() { STATE.league.players = DEMO_PLAYERS.slice(0, STATE.league.numTeams * STATE.league.ppt).map(name => ({ id: uid(), name, teamId: null })); R(); }
     function swapOrd(i, d) { const j = i + d; if (j < 0 || j >= STATE.league.draftOrder.length) return; [STATE.league.draftOrder[i], STATE.league.draftOrder[j]] = [STATE.league.draftOrder[j], STATE.league.draftOrder[i]]; R(); }
     function setDraftPosition(teamId, newPos) { const order = [...STATE.league.draftOrder]; const currentIndex = order.indexOf(teamId); const targetIndex = Math.max(0, Math.min(order.length - 1, newPos)); if (currentIndex === -1 || currentIndex === targetIndex) return; order.splice(currentIndex, 1); order.splice(targetIndex, 0, teamId); STATE.league.draftOrder = order; R(); }
@@ -6628,9 +6641,184 @@ async function assignCaptain(playerId, teamId) {
         </div>` : ''}`;
     }
 
+
+    function renderCommLobby(l) {
+      const lobbyTab = STATE.commLobbyTab || 'captains';
+      const tabs = [
+        { key: 'captains', icon: '👥', label: 'Captains' },
+        { key: 'draft', icon: '🎯', label: 'Draft Setup' },
+        { key: 'settings', icon: '⚙️', label: 'Settings' },
+      ];
+      const tabBar = `<div style='display:flex;border-bottom:2px solid var(--b1);background:#fff;position:sticky;top:0;z-index:10'>
+        ${tabs.map(t => `<button onclick="STATE.commLobbyTab='${t.key}';R()" style='flex:1;padding:10px 4px 8px;border:none;background:none;cursor:pointer;font-size:10px;font-weight:800;color:${lobbyTab===t.key?'var(--g)':'var(--t3)'};border-bottom:2px solid ${lobbyTab===t.key?'var(--g)':'transparent'};margin-bottom:-2px;display:flex;flex-direction:column;align-items:center;gap:2px;text-transform:uppercase;letter-spacing:.4px'>
+          <span style='font-size:18px'>${t.icon}</span>${t.label}
+        </button>`).join('')}
+      </div>`;
+
+      let content = '';
+
+      if (lobbyTab === 'captains') {
+        const captainCount = l.teams.filter(t => t.captainId).length;
+        const allSet = captainCount === l.teams.length;
+        const joinedPlayers = l.players.filter(p => p.userId && !l.teams.some(t => t.captainId === p.id));
+
+        content = `
+          <!-- STATUS BANNER -->
+          <div style='background:${allSet?"#f0fdf4":"#fffbeb"};border:1.5px solid ${allSet?"#86efac":"#fde68a"};border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px'>
+            <div>
+              <div style='font-size:14px;font-weight:800;color:${allSet?"#15803d":"#b45309"}'>${allSet?"✅ All captains assigned — ready to draft!":"⚡ "+captainCount+" of "+l.teams.length+" captains assigned"}</div>
+              <div style='font-size:11px;color:${allSet?"#16a34a":"#92400e"};margin-top:2px'>${allSet?"Hit Start Draft in the Draft Setup tab when ready.":"Assign a captain to each team below."}</div>
+            </div>
+          </div>
+
+          <!-- SHARE CODE -->
+          <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px 16px;margin-bottom:16px'>
+            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px'>League Code — Share with players</div>
+            <div style='display:flex;align-items:center;gap:10px'>
+              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:28px;color:var(--t1);letter-spacing:3px;flex:1'>${l.id}</div>
+              <button onclick='showLeagueCode()' class='btn btn-o btn-sm'>📋 Copy</button>
+            </div>
+          </div>
+
+          <!-- TEAMS WITH CAPTAIN ASSIGNMENT -->
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Teams</div>
+          ${l.teams.map(t => {
+            const captain = t.captainId ? l.players.find(p => p.id === t.captainId) : null;
+            const needsCaptain = !captain;
+            const availablePlayers = l.players.filter(p => p.userId && !l.teams.some(tt => tt.captainId === p.id));
+            return `<div style='background:#fff;border:1.5px solid ${needsCaptain?"rgba(245,158,11,.5)":"var(--b1)"};border-radius:12px;overflow:hidden;margin-bottom:10px'>
+              <div style='display:flex;align-items:center;gap:10px;padding:12px 14px;background:${needsCaptain?"rgba(245,158,11,.06)":"var(--f4)"};border-bottom:1px solid var(--b1)'>
+                ${teamAvatar(t,'tm-av')}
+                <div style='flex:1'>
+                  <div style='font-size:14px;font-weight:800;color:var(--t1)'>${t.name}</div>
+                  <div style='font-size:11px;color:${needsCaptain?"#b45309":"var(--t3)"}'>${needsCaptain?"⚡ Needs a captain":"Captain: "+captain.name}</div>
+                </div>
+                ${!needsCaptain ? `<button onclick='removeCaptain("${t.captainId}")' style='font-size:10px;font-weight:700;color:var(--red);background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:3px 8px;cursor:pointer'>Remove</button>` : ''}
+              </div>
+              ${needsCaptain ? `<div style='padding:12px 14px;display:flex;align-items:center;gap:8px'>
+                ${availablePlayers.length
+                  ? `<select id='cap-${t.id}' class='fi' style='flex:1;margin:0'><option value=''>Pick from joined players...</option>${availablePlayers.map(p=>`<option value='${p.id}'>${p.name}</option>`).join('')}</select>
+                     <button class='btn btn-p btn-sm' onclick="const v=document.getElementById('cap-${t.id}').value;if(v)assignCaptain(v,'${t.id}')">Assign</button>`
+                  : `<div style='font-size:12px;color:var(--t3);font-style:italic'>Waiting for players to join via league code...</div>`}
+              </div>` : ''}
+            </div>`;
+          }).join('')}
+
+          <!-- JOINED PLAYERS NOT YET ASSIGNED -->
+          ${joinedPlayers.length ? `
+          <div style='margin-top:4px'>
+            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Joined — Not Yet Assigned (${joinedPlayers.length})</div>
+            ${joinedPlayers.map(p => `<div style='background:#fff;border:1px solid var(--b1);border-radius:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:6px'>
+              <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1'>${p.name}</span>
+              <select id='assign-${p.id}' class='fi' style='width:auto;margin:0;font-size:11px'><option value=''>Assign to team...</option>${l.teams.filter(t=>!t.captainId).map(t=>`<option value='${t.id}'>${t.name}</option>`).join('')}</select>
+              <button class='btn btn-p btn-xs' onclick="const v=document.getElementById('assign-${p.id}').value;if(v)assignCaptain('${p.id}',v)">Make Captain</button>
+            </div>`).join('')}
+          </div>` : ''}`;
+      }
+
+      else if (lobbyTab === 'draft') {
+        const ds = l.draftState;
+        const quickTimes = [30, 60, 90, 120];
+        content = `
+          <!-- START DRAFT -->
+          <div style='background:var(--n2);border-radius:12px;padding:18px;margin-bottom:20px'>
+            <div style='font-size:14px;font-weight:800;color:#fff;margin-bottom:6px'>${ds?.status==='done'?"Draft Complete ✓":ds?"Draft in Progress":"Ready to start the draft?"}</div>
+            <div style='font-size:11px;color:rgba(255,255,255,.5);margin-bottom:14px'>${ds?.status==='done'?"All picks made.":ds?"Picks: "+(ds.picks?.length||0)+" of "+(ds.total||0):(l.teams.filter(t=>t.captainId).length)+" of "+l.teams.length+" captains assigned."}</div>
+            <div style='display:flex;gap:8px;flex-wrap:wrap'>
+              ${!ds ? `<button class='btn btn-p btn-sm' onclick='beginDraftTransition()'>▶ Start Draft</button><button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Sim Draft</button>`
+                : ds.status==='active'?`<button class='btn btn-o btn-sm' onclick='pauseDraft()'>⏸ Pause</button>`
+                : ds.status==='paused'?`<button class='btn btn-p btn-sm' onclick='resumeDraft()'>▶ Resume</button>`
+                : `<button class='btn btn-p btn-sm' onclick='beginSeasonTransition()'>Enter League →</button><button class='btn btn-o btn-sm' onclick="STATE.appTab='draft';R()">Review Draft</button>`}
+              ${ds ? `<button class='btn btn-o btn-sm' style='color:var(--red);border-color:var(--red)' onclick='resetDraftBoard()'>Reset Draft</button>` : ''}
+            </div>
+          </div>
+
+          <!-- TIMER -->
+          <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:16px'>
+            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Pick Timer</div>
+            <div style='display:flex;gap:8px;flex-wrap:wrap'>
+              ${quickTimes.map(sec=>`<button class='btn ${l.timerSecs===sec?'btn-p':'btn-o'} btn-sm' onclick='STATE.league.timerSecs=${sec};R()'>${sec}s</button>`).join('')}
+            </div>
+          </div>
+
+          <!-- DRAFT ORDER -->
+          <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;overflow:hidden;margin-bottom:16px'>
+            <div style='padding:12px 14px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between'>
+              <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Draft Order</div>
+              ${!ds ? `<div style='display:flex;gap:6px'>
+                <button class='btn btn-p btn-xs' onclick="STATE.league.draftOrder=[...STATE.league.draftOrder].sort(()=>Math.random()-.5);R()">🔀 Randomize</button>
+                <button class='btn btn-o btn-xs' onclick="STATE.league.draftOrder=STATE.league.teams.map(t=>t.id);R()">↺ Reset</button>
+              </div>` : `<span style='font-size:10px;color:var(--t3)'>Locked</span>`}
+            </div>
+            ${(l.draftOrder||[]).map((tid,i) => {
+              const t = l.teams.find(x=>x.id===tid);
+              return `<div style='display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--b1)'>
+                <span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:18px;color:var(--t3);min-width:22px'>${i+1}</span>
+                ${teamAvatar(t||{name:'?',color:'#64748b'},'tm-av')}
+                <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1'>${t?.name||'?'}</span>
+                ${!ds ? `<div style='display:flex;gap:4px'>
+                  ${i>0?`<button onclick="const o=STATE.league.draftOrder;[o[${i}],o[${i-1}]]=[o[${i-1}],o[${i}]];R()" style='padding:4px 8px;border-radius:6px;background:var(--f4);border:1px solid var(--b1);cursor:pointer;font-size:12px'>↑</button>`:''}
+                  ${i<(l.draftOrder||[]).length-1?`<button onclick="const o=STATE.league.draftOrder;[o[${i}],o[${i+1}]]=[o[${i+1}],o[${i}]];R()" style='padding:4px 8px;border-radius:6px;background:var(--f4);border:1px solid var(--b1);cursor:pointer;font-size:12px'>↓</button>`:''}
+                </div>` : ''}
+              </div>`;
+            }).join('')}
+          </div>`;
+      }
+
+      else if (lobbyTab === 'settings') {
+        content = `
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>League Info</div>
+          <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:20px'>
+            <div class='fg' style='margin-bottom:10px'><label class='fl'>League Name</label><input class='fi' value='${l.name}' oninput="STATE.league.name=this.value"></div>
+            <div class='fg' style='margin-bottom:0'><label class='fl'>League Code</label>
+              <div style='display:flex;gap:8px'><input class='fi' value='${l.id}' readonly style='font-family:"Barlow Condensed",sans-serif;font-weight:700;letter-spacing:1px'><button class='btn btn-o btn-sm' onclick='showLeagueCode()'>📋 Share</button></div>
+            </div>
+          </div>
+
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Courts</div>
+          <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:20px'>
+            ${l.courts.map((c,i)=>`<div style='display:flex;gap:8px;align-items:center;margin-bottom:8px'>
+              <input class='fi' style='flex:1' value='${c}' onblur="renameScheduleCourt(${i},this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder='Court name'>
+              <button onclick="removeScheduleCourt(${i})" style='width:32px;height:32px;border-radius:8px;background:var(--f4);border:1px solid var(--b1);cursor:pointer;font-size:16px;color:var(--t3)' ${l.courts.filter(Boolean).length<=1?'disabled':''}>×</button>
+            </div>`).join('')}
+            <button onclick="addScheduleCourt()" class='btn btn-o btn-sm' style='margin-top:4px'>+ Add Court</button>
+          </div>
+
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Game Days</div>
+          <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:20px'>
+            <div style='display:flex;align-items:center;gap:16px;margin-bottom:8px'>
+              <button onclick="if(STATE.league.gameDays.length>1){STATE.league.gameDays.pop();STATE.league.gameDays.forEach((g,i)=>g.num=i+1);R()}" style='width:36px;height:36px;border-radius:10px;background:var(--f4);border:1.5px solid var(--b1);font-size:20px;cursor:pointer'>−</button>
+              <span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:36px;color:var(--t1);min-width:40px;text-align:center'>${l.gameDays.length}</span>
+              <button onclick="STATE.league.gameDays.push({num:STATE.league.gameDays.length+1,time:'4:00 PM',courts:[...STATE.league.courts.filter(Boolean)]});R()" style='width:36px;height:36px;border-radius:10px;background:var(--f4);border:1.5px solid var(--b1);font-size:20px;cursor:pointer'>+</button>
+            </div>
+            <div style='font-size:11px;color:var(--t3)'>Game times are set when each day starts during the season.</div>
+          </div>
+
+          <div style='font-size:10px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>⚠️ Danger Zone</div>
+          <div style='background:#fff;border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:14px'>
+            <div style='display:flex;gap:8px;flex-wrap:wrap'>
+              <button class='btn btn-o btn-sm' onclick='confirmReset()' style='color:var(--red);border-color:var(--red)'>🔄 Reset League</button>
+              <button class='btn btn-o btn-sm' onclick="confirmDeleteLeague('${l.id}')" style='color:var(--red);border-color:var(--red)'>🗑 Delete League</button>
+            </div>
+          </div>`;
+      }
+
+      return `<div style='min-height:100vh;background:var(--f4)'>
+        <div style='background:var(--n2);padding:14px 18px'>
+          <div style='font-size:9px;font-weight:800;color:rgba(255,255,255,.4);letter-spacing:1.4px;text-transform:uppercase'>League Setup</div>
+          <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:22px;color:#fff'>${l.name}</div>
+        </div>
+        ${tabBar}
+        <div style='padding:16px'>${content}</div>
+        ${STATE.modal ? renderModal() : ''}
+      </div>`;
+    }
+
     function renderComm() {
       const l = STATE.league;
       if (!l) return '';
+      // Lobby phase gets its own focused view
+      if (l.status === 'lobby') return renderCommLobby(l);
       const tab = STATE.commTab || 'gameday';
       const standings = getStandingsRows(l);
       const totalGames = l.games.length;
@@ -7536,10 +7724,12 @@ async function assignCaptain(playerId, teamId) {
     }
 
 
-    function renderMainApp() { const l = STATE.league; if (!l) { STATE.screen = 'landing'; return renderLanding(); } const isDraftLive = l?.draftState?.status === 'active'; const isPlayoffs = l.status === 'playoffs' || l.status === 'complete';
+    function renderMainApp() { const l = STATE.league; if (!l) { STATE.screen = 'landing'; return renderLanding(); } const isDraftLive = l?.draftState?.status === 'active'; const isPlayoffs = l.status === 'playoffs' || l.status === 'complete'; const isDraftPhase = l.status === 'draft';
       const tabs = l.status === 'lobby'
         ? [{k:'home',lb:'Home'},{k:'commissioner',lb:'⚙️ Edit League'}]
-        : [{k:'home',lb:'Home'},{k:'standings',lb:'Standings'},{k:'schedule',lb:'Schedule'},{k:'rosters',lb:'Rosters'},...(isPlayoffs ? [{k:'playoffs',lb:'🏆 Playoffs',cls:'live'}] : l.status === 'season' ? [] : [{k:'draft',lb:isDraftLive?'🟢 Draft Room':'Draft Room',cls:isDraftLive?'live':''}]),{k:'commissioner',lb:'Commissioner'}]; const nav = `<div class='nav' ${isPlayoffs?"style='background:linear-gradient(135deg,#0c0900,#1a1100);border-bottom:1px solid rgba(245,158,11,.25)'":''}><div style='display:flex;align-items:center;gap:0;flex:1;overflow:hidden'><div style='display:flex;align-items:center;flex-shrink:0;cursor:pointer' onclick='goHome()'><span class='logo-mark' style='color:${isPlayoffs?"#f59e0b":""}'>RYL</span></div><span style='color:rgba(255,255,255,.18);font-size:13px;margin:0 7px'>/</span><div class='league-switcher-root' style='position:relative;margin-right:8px'>
+        : isDraftPhase
+        ? [{k:'home',lb:'Home'},{k:'draft',lb:isDraftLive?'🟢 Draft Room':'Draft Room',cls:isDraftLive?'live':''}]
+        : [{k:'home',lb:'Home'},{k:'standings',lb:'Standings'},{k:'schedule',lb:'Schedule'},{k:'rosters',lb:'Rosters'},...(isPlayoffs?[{k:'playoffs',lb:'🏆 Playoffs',cls:'live'}]:[]),{k:'commissioner',lb:'Commissioner'}]; const nav = `<div class='nav' ${isPlayoffs?"style='background:linear-gradient(135deg,#0c0900,#1a1100);border-bottom:1px solid rgba(245,158,11,.25)'":''}><div style='display:flex;align-items:center;gap:0;flex:1;overflow:hidden'><div style='display:flex;align-items:center;flex-shrink:0;cursor:pointer' onclick='goHome()'><span class='logo-mark' style='color:${isPlayoffs?"#f59e0b":""}'>RYL</span></div><span style='color:rgba(255,255,255,.18);font-size:13px;margin:0 7px'>/</span><div class='league-switcher-root' style='position:relative;margin-right:8px'>
         <button onclick="STATE.showLeagueSwitcher=!STATE.showLeagueSwitcher;R()" style='display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:4px 10px;cursor:pointer;max-width:130px'>
           <span style='font-size:11px;font-weight:700;color:rgba(255,255,255,.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px'>${l.name||'My League'}</span>
           <span style='color:rgba(255,255,255,.4);font-size:10px;flex-shrink:0'>${STATE.showLeagueSwitcher?'▲':'▼'}</span>
@@ -7578,7 +7768,7 @@ async function assignCaptain(playerId, teamId) {
       const playoffBanner = (isPlayoffs && l.status !== 'complete') ? `<div style='background:linear-gradient(90deg,rgba(245,158,11,.12),rgba(245,158,11,.06));border-bottom:1px solid rgba(245,158,11,.2);padding:7px 18px;display:flex;align-items:center;gap:8px;position:sticky;top:52px;z-index:9'><span style='font-size:13px'>🏆</span><span style='font-size:10px;font-weight:900;color:#d97706;text-transform:uppercase;letter-spacing:1.4px'>Playoff Mode — Win or Go Home</span></div>` : '';
       let content = ''; if (STATE.showChampCard) return nav + leagueSwitcherDropdown + renderChampionCard();
       if (STATE.showRecap) return nav + leagueSwitcherDropdown + renderSeasonRecap();
-       if (l.status === 'transition') content = renderTransition(); else if (l.status === 'lobby' && STATE.appTab !== 'commissioner') content = renderLobby(); else if (STATE.appTab === 'home') content = l.status === 'lobby' ? renderLobby() : renderHome(); else if (STATE.appTab === 'standings') content = renderStandings(); else if (STATE.appTab === 'schedule') content = renderSchedule(); else if (STATE.appTab === 'rosters') content = renderRosters(); else if (STATE.appTab === 'draft') content = renderDraft(); else if (STATE.appTab === 'playoffs') content = renderPlayoffs(); else if (STATE.appTab === 'commissioner') content = renderComm(); return `<div>${nav}${leagueSwitcherDropdown}${playoffBanner}${content}${STATE.modal ? renderModal() : ''}</div>`; }
+       if (l.status === 'transition') content = renderTransition(); else if (l.status === 'lobby' && STATE.appTab !== 'commissioner') content = renderLobby(); else if (STATE.appTab === 'home') content = l.status === 'lobby' ? renderLobby() : renderHome(); else if (STATE.appTab === 'standings') content = renderStandings(); else if (STATE.appTab === 'schedule') content = renderSchedule(); else if (STATE.appTab === 'rosters') content = renderRosters(); else if (STATE.appTab === 'draft') content = renderDraft(); else if (STATE.appTab === 'playoffs') content = renderPlayoffs(); else if (STATE.appTab === 'commissioner') { if (l.status === 'lobby' && !STATE.commLobbyTab) STATE.commLobbyTab = 'captains'; content = renderComm(); } return `<div>${nav}${leagueSwitcherDropdown}${playoffBanner}${content}${STATE.modal ? renderModal() : ''}</div>`; }
     function renderApp() {
       if (STATE.authLoading) return `<div style='min-height:100vh;background:#07110b;display:flex;align-items:center;justify-content:center'><div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:32px;color:rgba(255,255,255,.3)'>RYL</div></div>`;
       if (STATE.screen === 'confirm_email') return renderConfirmEmail();
