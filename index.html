@@ -2415,12 +2415,18 @@
       openModal('Add Player',
         `<div class='fg' style='margin-bottom:0'>
           <label class='fl'>Player Name</label>
-          <input class='fi' id='addPlayerName' placeholder='e.g. Alex Johnson' onkeydown="if(event.key==='Enter')document.getElementById('addPlayerBtn').click()">
+          <input class='fi' id='addPlayerName' placeholder='e.g. Alex Johnson' onkeydown="if(event.key==='Enter')doAddPlayer()">
         </div>`,
         `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Cancel</button>
-         <button id='addPlayerBtn' class='btn btn-p btn-sm' onclick="const n=document.getElementById('addPlayerName')?.value?.trim();if(!n)return;STATE.league.players.push({id:uid(),name:n,teamId:null});closeModal();">Add Player</button>`
+         <button class='btn btn-p btn-sm' onclick='doAddPlayer()'>Add Player</button>`
       );
       setTimeout(() => document.getElementById('addPlayerName')?.focus(), 100);
+    }
+    function doAddPlayer() {
+      const n = document.getElementById('addPlayerName')?.value?.trim();
+      if (!n) return;
+      STATE.league.players.push({ id: uid(), name: n, teamId: null });
+      closeModal();
     }
     function loadDemoPlayers() { STATE.league.players = DEMO_PLAYERS.slice(0, STATE.league.numTeams * STATE.league.ppt).map(name => ({ id: uid(), name, teamId: null })); R(); }
     function swapOrd(i, d) { const j = i + d; if (j < 0 || j >= STATE.league.draftOrder.length) return; [STATE.league.draftOrder[i], STATE.league.draftOrder[j]] = [STATE.league.draftOrder[j], STATE.league.draftOrder[i]]; R(); }
