@@ -1739,6 +1739,7 @@
       myQueue: [],                   // personal draft queue — local only, never synced
       commTab: 'gameday',            // active commissioner tools tab
       commLobbyTab: 'captains',      // active lobby commissioner tab
+      teamJustAssigned: null,        // teamId just assigned to this player (triggers banner)
     };
 
     function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -2188,6 +2189,12 @@
           // Only skip if this is our own echo — always accept updates from other devices
           if (updated._saveId && updated._saveId === _lastSaveId) return;
           delete updated._saveId;
+          // Detect team assignment for players (in-app banner)
+          if (STATE.user && STATE.memberRole === 'player') {
+            const oldTeamId = STATE.league?.players?.find(p => p.userId === STATE.user.id)?.teamId;
+            const newTeamId = updated?.players?.find(p => p.userId === STATE.user.id)?.teamId;
+            if (!oldTeamId && newTeamId) STATE.teamJustAssigned = newTeamId;
+          }
           STATE.league = updated;
           const idx = STATE.leagues.findIndex(l => l.id === leagueId);
           if (idx >= 0) STATE.leagues[idx] = updated;
@@ -4567,7 +4574,15 @@
         ${renderSeasonHomeActivity(l)}
       </div><div style='height:18px'></div>`;
 
-      return heroHtml + myGameHtml + chipsHtml + twoColHtml;
+      const assignBanner = STATE.teamJustAssigned ? (() => {
+        const assignedTeam = l.teams.find(t => t.id === STATE.teamJustAssigned);
+        return `<div style='background:linear-gradient(135deg,#052e16,#14532d);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px'>
+          <div><div style='font-size:10px;font-weight:800;color:rgba(74,222,128,.7);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px'>🏀 You've been assigned!</div>
+          <div style='font-size:15px;font-weight:800;color:#fff'>Welcome to ${assignedTeam?.name || 'your team'}!</div></div>
+          <button onclick="STATE.teamJustAssigned=null;R()" style='background:none;border:none;color:rgba(255,255,255,.4);font-size:20px;cursor:pointer;flex-shrink:0'>×</button>
+        </div>`;
+      })() : '';
+      return assignBanner + heroHtml + myGameHtml + chipsHtml + twoColHtml;
     }
     function renderSeasonHome() {
       const l = STATE.league;
@@ -6648,6 +6663,52 @@ async function assignCaptain(playerId, teamId) {
     }
 
 
+    function beginManualAssign() { STATE.showManualAssign = true; R(); }
+    function doEnterLeagueManual() { STATE.showManualAssign = false; beginSeasonTransition(); }
+
+    function renderManualAssignment() {
+      const l = STATE.league;
+      const unassigned = l.players.filter(p => !p.teamId && !l.teams.some(t => t.captainId === p.id));
+      const teamSizes = l.teams.map(t => ({ t, count: l.players.filter(p => p.teamId === t.id || t.captainId === p.id).length }));
+      const maxSize = Math.max(...teamSizes.map(x => x.count), 0);
+      const minSize = Math.min(...teamSizes.map(x => x.count), 0);
+      const uneven = maxSize - minSize > 1 && l.teams.length > 1;
+      const teamOpts = l.teams.map(t => `<option value='${t.id}'>${t.name}</option>`).join('');
+      return `<div style='min-height:100vh;background:var(--f4)'>
+        <div style='background:var(--n2);padding:14px 18px;display:flex;align-items:center;justify-content:space-between'>
+          <div>
+            <div style='font-size:9px;font-weight:800;color:rgba(255,255,255,.4);letter-spacing:1.4px;text-transform:uppercase'>Manual Assignment</div>
+            <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:22px;color:#fff'>${l.name}</div>
+          </div>
+          <button class='btn btn-p btn-sm' onclick='doEnterLeagueManual()'>Enter League →</button>
+        </div>
+        <div style='padding:16px'>
+          ${uneven ? `<div style='background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:16px'><div style='font-size:13px;font-weight:700;color:#b45309'>⚠️ Teams are uneven — some have more players than others</div></div>` : ''}
+          ${unassigned.length ? `<div style='margin-bottom:20px'>
+            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Unassigned (${unassigned.length})</div>
+            ${unassigned.map(p => `<div style='background:#fff;border:1.5px solid #fde68a;border-radius:10px;display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:6px;flex-wrap:wrap'>
+              <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1;min-width:100px'>${p.name}</span>
+              <select id='ma-${p.id}' class='fi' style='width:auto;margin:0;font-size:12px'><option value=''>Team...</option>${teamOpts}</select>
+              <button class='btn btn-p btn-xs' onclick="const v=document.getElementById('ma-${p.id}').value;if(v){STATE.league.players=STATE.league.players.map(pl=>pl.id==='${p.id}'?{...pl,teamId:v}:pl);saveState();R()}">Assign</button>
+              <button class='btn btn-o btn-xs' onclick="const v=document.getElementById('ma-${p.id}').value;if(v)assignCaptain('${p.id}',v)">Captain</button>
+            </div>`).join('')}
+          </div>` : `<div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;margin-bottom:20px'><div style='font-size:13px;font-weight:700;color:#15803d'>✅ All players assigned!</div></div>`}
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Teams</div>
+          ${l.teams.map(t => {
+            const roster = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
+            const captain = t.captainId ? l.players.find(p => p.id === t.captainId) : null;
+            return `<div style='background:#fff;border:1.5px solid var(--b1);border-radius:12px;overflow:hidden;margin-bottom:10px'>
+              <div style='display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--f4);border-bottom:1px solid var(--b1)'>${teamAvatar(t,'tm-av')}<div style='flex:1'><div style='font-size:14px;font-weight:800;color:var(--t1)'>${t.name}</div><div style='font-size:11px;color:var(--t3)'>${captain?'Captain: '+captain.name:'No captain'} · ${roster.length} players</div></div></div>
+              ${roster.map(p => `<div style='display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--b1)'><span style='font-size:13px;font-weight:${t.captainId===p.id?700:500};color:var(--t1);flex:1'>${p.name}${t.captainId===p.id?' <span style="font-size:9px;font-weight:800;background:var(--gm);color:var(--gd);border-radius:4px;padding:1px 5px">CAP</span>':''}</span><button class="btn btn-o btn-xs" style="color:var(--red)" onclick="STATE.league.players=STATE.league.players.map(pl=>pl.id==='${p.id}'?{...pl,teamId:null}:pl);saveState();R()">Remove</button></div>`).join('') || `<div style='padding:12px 14px;font-size:12px;color:var(--t3);font-style:italic'>No players yet</div>`}
+            </div>`;
+          }).join('')}
+          <div style='margin-top:8px'><div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Add Player</div>
+          <div style='display:flex;gap:8px'><input class='fi' id='maAddInput' style='flex:1;margin:0' placeholder='Player name...' onkeydown="if(event.key==='Enter'){const v=this.value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});this.value='';R();}}"><button class='btn btn-p btn-sm' onclick="const v=document.getElementById('maAddInput').value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});document.getElementById('maAddInput').value='';R();}">Add</button></div></div>
+        </div>
+        ${STATE.modal ? renderModal() : ''}
+      </div>`;
+    }
+
     function renderCommLobby(l) {
       const lobbyTab = STATE.commLobbyTab || 'captains';
       const tabs = [
@@ -6736,10 +6797,16 @@ async function assignCaptain(playerId, teamId) {
         content = `
           <!-- START DRAFT -->
           <div style='background:var(--n2);border-radius:12px;padding:18px;margin-bottom:20px'>
-            <div style='font-size:14px;font-weight:800;color:#fff;margin-bottom:6px'>${ds?.status==='done'?"Draft Complete ✓":ds?"Draft in Progress":"Ready to start the draft?"}</div>
-            <div style='font-size:11px;color:rgba(255,255,255,.5);margin-bottom:14px'>${ds?.status==='done'?"All picks made.":ds?"Picks: "+(ds.picks?.length||0)+" of "+(ds.total||0):(l.teams.filter(t=>t.captainId).length)+" of "+l.teams.length+" captains assigned."}</div>
+            <div style='display:flex;gap:8px;margin-bottom:14px'>
+              <button onclick="STATE.league.draftMode='draft';R()" style='flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:700;border:1.5px solid ${(!l.draftMode||l.draftMode==='draft')?'#4ade80':'rgba(255,255,255,.2)'};background:${(!l.draftMode||l.draftMode==='draft')?'rgba(74,222,128,.15)':'transparent'};color:${(!l.draftMode||l.draftMode==='draft')?'#4ade80':'rgba(255,255,255,.5)'};cursor:pointer'>🎯 Draft</button>
+              <button onclick="STATE.league.draftMode='manual';R()" style='flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:700;border:1.5px solid ${l.draftMode==='manual'?'#4ade80':'rgba(255,255,255,.2)'};background:${l.draftMode==='manual'?'rgba(74,222,128,.15)':'transparent'};color:${l.draftMode==='manual'?'#4ade80':'rgba(255,255,255,.5)'};cursor:pointer'>✋ Manual Assignment</button>
+            </div>
+            <div style='font-size:11px;color:rgba(255,255,255,.4);margin-bottom:14px'>${l.draftMode==='manual'?'You will assign each player to a team manually.':'Snake draft — captains pick players in order.'}</div>
+            <div style='font-size:14px;font-weight:800;color:#fff;margin-bottom:6px'>${ds?.status==='done'?"Draft Complete ✓":ds?"Draft in Progress":"Ready to start?"}</div>
             <div style='display:flex;gap:8px;flex-wrap:wrap'>
-              ${!ds ? `<button class='btn btn-p btn-sm' onclick='beginDraftTransition()'>▶ Start Draft</button><button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Sim Draft</button>`
+              ${!ds ? (l.draftMode==='manual'
+                ? `<button class='btn btn-p btn-sm' onclick='beginManualAssign()'>✋ Assign Players</button>`
+                : `<button class='btn btn-p btn-sm' onclick='beginDraftTransition()'>▶ Start Draft</button><button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Sim Draft</button>`)
                 : ds.status==='active'?`<button class='btn btn-o btn-sm' onclick='pauseDraft()'>⏸ Pause</button>`
                 : ds.status==='paused'?`<button class='btn btn-p btn-sm' onclick='resumeDraft()'>▶ Resume</button>`
                 : `<button class='btn btn-p btn-sm' onclick='beginSeasonTransition()'>Enter League →</button><button class='btn btn-o btn-sm' onclick="STATE.appTab='draft';R()">Review Draft</button>`}
@@ -7779,6 +7846,7 @@ async function assignCaptain(playerId, teamId) {
           </div>
         </div>` : '';
       const playoffBanner = (isPlayoffs && l.status !== 'complete') ? `<div style='background:linear-gradient(90deg,rgba(245,158,11,.12),rgba(245,158,11,.06));border-bottom:1px solid rgba(245,158,11,.2);padding:7px 18px;display:flex;align-items:center;gap:8px;position:sticky;top:52px;z-index:9'><span style='font-size:13px'>🏆</span><span style='font-size:10px;font-weight:900;color:#d97706;text-transform:uppercase;letter-spacing:1.4px'>Playoff Mode — Win or Go Home</span></div>` : '';
+      if (STATE.showManualAssign) return nav + leagueSwitcherDropdown + renderManualAssignment();
       let content = ''; if (STATE.showChampCard) return nav + leagueSwitcherDropdown + renderChampionCard();
       if (STATE.showRecap) return nav + leagueSwitcherDropdown + renderSeasonRecap();
        if (l.status === 'transition') content = renderTransition(); else if (l.status === 'lobby' && STATE.appTab !== 'commissioner') content = renderLobby(); else if (STATE.appTab === 'home') content = l.status === 'lobby' ? renderLobby() : renderHome(); else if (STATE.appTab === 'standings') content = renderStandings(); else if (STATE.appTab === 'schedule') content = renderSchedule(); else if (STATE.appTab === 'rosters') content = renderRosters(); else if (STATE.appTab === 'draft') content = renderDraft(); else if (STATE.appTab === 'playoffs') content = renderPlayoffs(); else if (STATE.appTab === 'commissioner') { if (l.status === 'lobby' && !STATE.commLobbyTab) STATE.commLobbyTab = 'captains'; content = renderComm(); } return `<div>${nav}${leagueSwitcherDropdown}${playoffBanner}${content}${STATE.modal ? renderModal() : ''}</div>`; }
