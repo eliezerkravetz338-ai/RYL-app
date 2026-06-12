@@ -6691,19 +6691,28 @@ async function assignCaptain(playerId, teamId) {
     }
 
 
-    function setPlayerTeam(pid, tid) {
-      STATE.league.players = STATE.league.players.map(p =>
-        p.id === pid ? { ...p, teamId: tid || null } : p
-      );
+    function previewAssign(pid, tid) {
+      if (!STATE.manualSelections) STATE.manualSelections = {};
+      if (STATE.manualSelections[pid] === tid) {
+        delete STATE.manualSelections[pid]; // tap again to deselect
+      } else {
+        STATE.manualSelections[pid] = tid;
+      }
+      R();
+    }
+    function applyManualAssignments() {
+      const sel = STATE.manualSelections || {};
+      STATE.league.players = STATE.league.players.map(p => {
+        const tid = sel[p.id];
+        if (tid) return { ...p, teamId: tid };
+        return p;
+      });
+      STATE.manualSelections = {};
       saveState();
-      // Visual feedback without full re-render
-      const row = document.getElementById('marow-' + pid);
-      if (row) row.style.borderColor = tid ? '#16a34a' : '#fde68a';
-      const check = document.getElementById('macheck-' + pid);
-      if (check) check.textContent = tid ? '✓' : '';
+      R();
     }
 
-    function beginManualAssign() { STATE.showManualAssign = true; R(); }
+    function beginManualAssign() { STATE.showManualAssign = true; STATE.manualSelections = {}; R(); }
     function doEnterLeagueManual() { STATE.showManualAssign = false; beginSeasonTransition(); }
     function applyManualAssignments() {
       const sel = STATE.manualSelections || {};
@@ -6734,11 +6743,9 @@ async function assignCaptain(playerId, teamId) {
 
     function renderManualAssignment() {
       const l = STATE.league;
+      const sel = STATE.manualSelections || {};
       const unassigned = l.players.filter(p => !p.teamId && !l.teams.some(t => t.captainId === p.id));
-      const assigned = l.players.filter(p => p.teamId || l.teams.some(t => t.captainId === p.id));
-      const teamSizes = l.teams.map(t => l.players.filter(p => p.teamId === t.id || t.captainId === p.id).length);
-      const uneven = teamSizes.length > 1 && Math.max(...teamSizes) - Math.min(...teamSizes) > 1;
-      const teamOpts = l.teams.map(t => `<option value='${t.id}'>${t.name}</option>`).join('');
+      const pendingCount = Object.values(sel).filter(Boolean).length;
 
       return `<div style='min-height:100vh;background:var(--f4)'>
         <div style='background:var(--n2);padding:14px 18px;display:flex;align-items:center;justify-content:space-between'>
@@ -6746,48 +6753,67 @@ async function assignCaptain(playerId, teamId) {
             <div style='font-size:9px;font-weight:800;color:rgba(255,255,255,.4);letter-spacing:1.4px;text-transform:uppercase'>Manual Assignment</div>
             <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:22px;color:#fff'>${l.name}</div>
           </div>
-          <button class='btn btn-p btn-sm' onclick='doEnterLeagueManual()'>Enter League →</button>
+          <button class='btn btn-gh btn-sm' onclick='doEnterLeagueManual()'>Skip →</button>
         </div>
         <div style='padding:16px'>
-          ${uneven ? `<div style='background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;font-weight:700;color:#b45309'>⚠️ Teams are uneven</div>` : ''}
 
           ${unassigned.length ? `
-          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Unassigned (${unassigned.length})</div>
-          ${unassigned.map(p => `
-            <div id='marow-${p.id}' style='background:#fff;border:1.5px solid #fde68a;border-radius:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:6px'>
-              <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1'>${p.name}</span>
-              <select onchange='setPlayerTeam("${p.id}",this.value)' style='padding:7px 10px;border:1.5px solid var(--b2);border-radius:8px;font-size:13px;font-weight:600;color:var(--t1);background:#fff;min-width:130px'>
-                <option value=''>Pick a team...</option>${teamOpts}
-              </select>
-              <span id='macheck-${p.id}' style='font-size:16px;color:#16a34a;font-weight:900;min-width:16px'></span>
-            </div>`).join('')}
-          <div style='height:16px'></div>` : `
-          <div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;font-weight:700;color:#15803d'>✅ All players assigned!</div>`}
-
-          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Teams (${assigned.length} assigned)</div>
-          ${l.teams.map(t => {
-            const roster = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
-            const captain = t.captainId ? l.players.find(p => p.id === t.captainId) : null;
-            return `<div style='background:#fff;border:1px solid var(--b1);border-radius:10px;overflow:hidden;margin-bottom:8px'>
-              <div style='display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--f4);border-bottom:1px solid var(--b1)'>
-                ${teamAvatar(t,'tm-av')}
-                <span style='font-size:13px;font-weight:800;color:var(--t1);flex:1'>${t.name}</span>
-                <span style='font-size:11px;color:var(--t3)'>${roster.length} players</span>
+          <!-- PLAYER SELECTION -->
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Assign Players to Teams</div>
+          ${unassigned.map(p => {
+            const selected = sel[p.id];
+            return `<div style='background:#fff;border:1.5px solid ${selected?'#16a34a':'#fde68a'};border-radius:12px;padding:12px 14px;margin-bottom:8px'>
+              <div style='font-size:14px;font-weight:700;color:var(--t1);margin-bottom:10px'>${p.name} ${selected ? `<span style='font-size:11px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:2px 8px'>→ ${l.teams.find(t=>t.id===selected)?.name}</span>` : ''}</div>
+              <div style='display:flex;gap:6px;flex-wrap:wrap'>
+                ${l.teams.map(t => `<button onclick="previewAssign('${p.id}','${t.id}')" style='padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid ${selected===t.id?t.color:'var(--b2)'};background:${selected===t.id?t.color+'18':'#fff'};color:${selected===t.id?t.color:'var(--t2)'};cursor:pointer'>${t.name}</button>`).join('')}
               </div>
-              ${roster.map(p => `<div style='display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--b1)'>
-                <span style='font-size:12px;font-weight:${t.captainId===p.id?700:400};color:var(--t1);flex:1'>${p.name}${t.captainId===p.id?' (CAP)':''}</span>
-                <button onclick="setPlayerTeam('${p.id}','');R()" style='font-size:10px;font-weight:700;color:var(--red);background:none;border:none;cursor:pointer'>Remove</button>
-              </div>`).join('') || `<div style='padding:10px 14px;font-size:11px;color:var(--t3);font-style:italic'>Empty</div>`}
             </div>`;
           }).join('')}
 
-          <div style='margin-top:12px'>
+          <!-- CONFIRM BUTTON -->
+          ${pendingCount ? `<button onclick='applyManualAssignments()' class='btn btn-p btn-sm' style='width:100%;padding:14px;font-size:15px;margin-top:8px;margin-bottom:20px'>
+            ✅ Add ${pendingCount} Player${pendingCount>1?'s':''} to Teams
+          </button>` : `<div style='text-align:center;padding:12px;color:var(--t3);font-size:13px;margin-bottom:20px'>Tap a team for each player above</div>`}
+          ` : `<div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;margin-bottom:20px'><div style='font-size:13px;font-weight:700;color:#15803d'>✅ All players assigned!</div></div>`}
+
+          <!-- TEAM ROSTERS PREVIEW -->
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Team Rosters</div>
+          ${l.teams.map(t => {
+            const current = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
+            const pending = unassigned.filter(p => sel[p.id] === t.id);
+            const captain = t.captainId ? l.players.find(p => p.id === t.captainId) : null;
+            return `<div style='background:#fff;border:1.5px solid var(--b1);border-radius:12px;overflow:hidden;margin-bottom:10px'>
+              <div style='display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--f4);border-bottom:1px solid var(--b1)'>
+                ${teamAvatar(t,'tm-av')}
+                <div style='flex:1'><div style='font-size:14px;font-weight:800;color:var(--t1)'>${t.name}</div>
+                <div style='font-size:11px;color:var(--t3)'>${current.length + pending.length} players${pending.length?` (${pending.length} pending)`:''}</div></div>
+              </div>
+              ${current.map(p => `<div style='display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--b1)'>
+                <span style='font-size:13px;font-weight:${t.captainId===p.id?700:400};color:var(--t1);flex:1'>${p.name}${t.captainId===p.id?' <span style="font-size:9px;font-weight:800;background:var(--gm);color:var(--gd);border-radius:4px;padding:1px 5px">CAP</span>':''}</span>
+              </div>`).join('')}
+              ${pending.map(p => `<div style='display:flex;align-items:center;padding:9px 14px;border-bottom:1px dashed var(--b1);background:rgba(22,163,74,.03)'>
+                <span style='font-size:13px;font-weight:400;color:#16a34a;flex:1'>+ ${p.name}</span>
+                <span style='font-size:10px;color:#16a34a;font-weight:700'>Pending</span>
+              </div>`).join('')}
+              ${!current.length && !pending.length ? `<div style='padding:10px 14px;font-size:12px;color:var(--t3);font-style:italic'>No players yet</div>` : ''}
+            </div>`;
+          }).join('')}
+
+          <!-- ADD PLAYER -->
+          <div style='margin-top:4px'>
             <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px'>Add Player</div>
             <div style='display:flex;gap:8px'>
               <input class='fi' id='maAddInput' style='flex:1;margin:0' placeholder='Player name...' onkeydown="if(event.key==='Enter'){const v=this.value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});this.value='';R();}}">
               <button class='btn btn-p btn-sm' onclick="const v=document.getElementById('maAddInput').value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});document.getElementById('maAddInput').value='';R();}">Add</button>
             </div>
           </div>
+
+          <!-- ENTER LEAGUE -->
+          <div style='margin-top:20px;padding-top:16px;border-top:1px solid var(--b1);text-align:center'>
+            <button class='btn btn-p btn-sm' style='width:100%;padding:14px;font-size:15px' onclick='doEnterLeagueManual()'>Enter League →</button>
+            <div style='font-size:11px;color:var(--t3);margin-top:8px'>Free agents can be assigned later from Commissioner → Teams</div>
+          </div>
+
         </div>
         ${STATE.modal ? renderModal() : ''}
       </div>`;
