@@ -3790,10 +3790,28 @@
     function wizS3() {
       const l = STATE.league;
       if (!l.draftOrder?.length) l.draftOrder = l.teams.map(t => t.id);
+      const isManual = l.draftMode === 'manual';
       const quickTimes = [30, 60, 90, 120];
       return `
-        <div class='wiz-title'>Draft settings</div>
-        <div class='wiz-sub' style='margin-bottom:20px'>How long does each captain have to make their pick?</div>
+        <div class='wiz-title'>Team Building</div>
+        <div class='wiz-sub' style='margin-bottom:20px'>How do you want to build your teams?</div>
+
+        <!-- MODE TOGGLE -->
+        <div style='display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px'>
+          <button onclick="STATE.league.draftMode='draft';R()" style='padding:16px 12px;border-radius:12px;border:2px solid ${!isManual?'var(--g)':'var(--b1)'};background:${!isManual?'var(--gm)':'#fff'};cursor:pointer;text-align:left'>
+            <div style='font-size:22px;margin-bottom:6px'>🎯</div>
+            <div style='font-size:14px;font-weight:800;color:${!isManual?'var(--gd)':'var(--t1)'};margin-bottom:4px'>Snake Draft</div>
+            <div style='font-size:11px;color:${!isManual?'var(--gd)':'var(--t3)'};line-height:1.4'>Captains take turns picking players in order</div>
+          </button>
+          <button onclick="STATE.league.draftMode='manual';R()" style='padding:16px 12px;border-radius:12px;border:2px solid ${isManual?'var(--g)':'var(--b1)'};background:${isManual?'var(--gm)':'#fff'};cursor:pointer;text-align:left'>
+            <div style='font-size:22px;margin-bottom:6px'>✋</div>
+            <div style='font-size:14px;font-weight:800;color:${isManual?'var(--gd)':'var(--t1)'};margin-bottom:4px'>Manual Assignment</div>
+            <div style='font-size:11px;color:${isManual?'var(--gd)':'var(--t3)'};line-height:1.4'>Commissioner assigns players directly to teams</div>
+          </button>
+        </div>
+
+        ${!isManual ? `
+        <!-- DRAFT SETTINGS -->
         <div class='fg' style='margin-bottom:24px'>
           <label class='fl'>Seconds per pick</label>
           <div style='display:flex;gap:8px;flex-wrap:wrap'>
@@ -3820,7 +3838,12 @@
               </div>
             </div>`;
           }).join('')}
-        </div>`; }
+        </div>` : `
+        <!-- MANUAL MODE INFO -->
+        <div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;'>
+          <div style='font-size:14px;font-weight:700;color:#15803d;margin-bottom:6px'>✅ Manual Assignment selected</div>
+          <div style='font-size:12px;color:#16a34a;line-height:1.6'>After launching the league, go to Commissioner → Draft Setup → Assign Players to place each player on their team. You can also assign players mid-season.</div>
+        </div>`}`; }
 
     function wizS4() {
       const l = STATE.league;
@@ -3860,7 +3883,7 @@
         <div class='wiz-sub' style='margin-bottom:20px'>Everything look right? You can still edit everything after launch.</div>
         <div style='background:var(--n2);border-radius:16px;padding:20px;margin-bottom:16px'>
           <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:28px;color:#fff;margin-bottom:6px'>${l.name || '(no name)'}</div>
-          <div style='font-size:12px;color:rgba(255,255,255,.35);margin-bottom:14px'>Basketball · Snake Draft · ${l.timerSecs}s/pick</div>
+          <div style='font-size:12px;color:rgba(255,255,255,.35);margin-bottom:14px'>Basketball · ${l.draftMode==='manual'?'Manual Assignment':'Snake Draft · '+l.timerSecs+'s/pick'}</div>
           <div style='display:flex;flex-wrap:wrap;gap:6px'>
             ${l.teams.map(t => `<div style='display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:4px 10px'>
               <div style='width:8px;height:8px;border-radius:50%;background:${t.color}'></div>
@@ -6663,17 +6686,47 @@ async function assignCaptain(playerId, teamId) {
     }
 
 
-    function beginManualAssign() { STATE.showManualAssign = true; R(); }
+    function beginManualAssign() { STATE.showManualAssign = true; STATE.manualSelections = {}; R(); }
     function doEnterLeagueManual() { STATE.showManualAssign = false; beginSeasonTransition(); }
+    function applyManualAssignments() {
+      const sel = STATE.manualSelections || {};
+      let changed = false;
+      STATE.league.players = STATE.league.players.map(p => {
+        const tid = sel[p.id];
+        if (tid === '__captain__') return p; // handled by assignCaptain separately
+        if (tid && tid !== p.teamId) { changed = true; return { ...p, teamId: tid }; }
+        return p;
+      });
+      // Handle captain assignments
+      Object.entries(sel).forEach(([pid, val]) => {
+        if (val && val.startsWith('cap:')) {
+          const teamId = val.slice(4);
+          assignCaptainSilent(pid, teamId);
+          changed = true;
+        }
+      });
+      STATE.manualSelections = {};
+      if (changed) { saveState(); R(); }
+    }
+    function assignCaptainSilent(playerId, teamId) {
+      const l = STATE.league;
+      // Remove old captain from team
+      l.teams = l.teams.map(t => t.id === teamId ? { ...t, captainId: playerId } : t);
+      l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: true, captainTeamId: teamId, teamId: teamId } : p);
+    }
 
     function renderManualAssignment() {
       const l = STATE.league;
+      const sel = STATE.manualSelections || {};
       const unassigned = l.players.filter(p => !p.teamId && !l.teams.some(t => t.captainId === p.id));
       const teamSizes = l.teams.map(t => ({ t, count: l.players.filter(p => p.teamId === t.id || t.captainId === p.id).length }));
       const maxSize = Math.max(...teamSizes.map(x => x.count), 0);
       const minSize = Math.min(...teamSizes.map(x => x.count), 0);
       const uneven = maxSize - minSize > 1 && l.teams.length > 1;
-      const teamOpts = l.teams.map(t => `<option value='${t.id}'>${t.name}</option>`).join('');
+      const teamOpts = `<option value=''>Team...</option>` + l.teams.map(t => `<option value='${t.id}'>${t.name}</option>`).join('');
+      const captainOpts = `<option value=''>Team...</option>` + l.teams.map(t => `<option value='cap:${t.id}'>${t.name} (as Captain)</option>`).join('');
+      const pendingCount = Object.values(sel).filter(Boolean).length;
+
       return `<div style='min-height:100vh;background:var(--f4)'>
         <div style='background:var(--n2);padding:14px 18px;display:flex;align-items:center;justify-content:space-between'>
           <div>
@@ -6683,16 +6736,25 @@ async function assignCaptain(playerId, teamId) {
           <button class='btn btn-p btn-sm' onclick='doEnterLeagueManual()'>Enter League →</button>
         </div>
         <div style='padding:16px'>
-          ${uneven ? `<div style='background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:16px'><div style='font-size:13px;font-weight:700;color:#b45309'>⚠️ Teams are uneven — some have more players than others</div></div>` : ''}
+          ${uneven ? `<div style='background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:12px'><div style='font-size:13px;font-weight:700;color:#b45309'>⚠️ Teams are uneven</div></div>` : ''}
+
           ${unassigned.length ? `<div style='margin-bottom:20px'>
-            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Unassigned (${unassigned.length})</div>
-            ${unassigned.map(p => `<div style='background:#fff;border:1.5px solid #fde68a;border-radius:10px;display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:6px;flex-wrap:wrap'>
+            <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px'>
+              <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Unassigned (${unassigned.length})</div>
+              ${pendingCount ? `<button class='btn btn-p btn-sm' onclick='applyManualAssignments()'>✓ Assign ${pendingCount} Selected</button>` : `<span style='font-size:11px;color:var(--t3)'>Select teams below</span>`}
+            </div>
+            ${unassigned.map(p => `<div style='background:#fff;border:1.5px solid ${sel[p.id]?'var(--g)':'#fde68a'};border-radius:10px;display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:6px;flex-wrap:wrap'>
               <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1;min-width:100px'>${p.name}</span>
-              <select id='ma-${p.id}' class='fi' style='width:auto;margin:0;font-size:12px'><option value=''>Team...</option>${teamOpts}</select>
-              <button class='btn btn-p btn-xs' onclick="const v=document.getElementById('ma-${p.id}').value;if(v){STATE.league.players=STATE.league.players.map(pl=>pl.id==='${p.id}'?{...pl,teamId:v}:pl);saveState();R()}">Assign</button>
-              <button class='btn btn-o btn-xs' onclick="const v=document.getElementById('ma-${p.id}').value;if(v)assignCaptain('${p.id}',v)">Captain</button>
+              <select onchange="if(!STATE.manualSelections)STATE.manualSelections={};STATE.manualSelections['${p.id}']=this.value;document.getElementById('assignBtn').textContent='✓ Assign '+Object.values(STATE.manualSelections).filter(Boolean).length+' Selected';document.getElementById('assignBtn').style.display=Object.values(STATE.manualSelections).filter(Boolean).length?'block':'none'" style='padding:6px 10px;border:1.5px solid ${sel[p.id]?'var(--g)':'var(--b2)'};border-radius:8px;font-size:12px;font-weight:600;color:var(--t1);background:#fff;min-width:120px'>
+                ${teamOpts}
+              </select>
+              <select onchange="if(!STATE.manualSelections)STATE.manualSelections={};STATE.manualSelections['${p.id}']='cap:'+this.value;document.getElementById('assignBtn').textContent='✓ Assign '+Object.values(STATE.manualSelections).filter(Boolean).length+' Selected';document.getElementById('assignBtn').style.display='block'" style='padding:6px 10px;border:1.5px solid var(--b2);border-radius:8px;font-size:12px;font-weight:600;color:var(--t2);background:#fff;min-width:120px'>
+                <option value=''>Make Captain of...</option>${l.teams.map(t=>`<option value='${t.id}'>${t.name}</option>`).join('')}
+              </select>
             </div>`).join('')}
+            <button id='assignBtn' class='btn btn-p btn-sm' style='width:100%;margin-top:8px;display:${pendingCount?'block':'none'}' onclick='applyManualAssignments()'>✓ Assign ${pendingCount} Selected</button>
           </div>` : `<div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;margin-bottom:20px'><div style='font-size:13px;font-weight:700;color:#15803d'>✅ All players assigned!</div></div>`}
+
           <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Teams</div>
           ${l.teams.map(t => {
             const roster = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
@@ -6702,6 +6764,7 @@ async function assignCaptain(playerId, teamId) {
               ${roster.map(p => `<div style='display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--b1)'><span style='font-size:13px;font-weight:${t.captainId===p.id?700:500};color:var(--t1);flex:1'>${p.name}${t.captainId===p.id?' <span style="font-size:9px;font-weight:800;background:var(--gm);color:var(--gd);border-radius:4px;padding:1px 5px">CAP</span>':''}</span><button class="btn btn-o btn-xs" style="color:var(--red)" onclick="STATE.league.players=STATE.league.players.map(pl=>pl.id==='${p.id}'?{...pl,teamId:null}:pl);saveState();R()">Remove</button></div>`).join('') || `<div style='padding:12px 14px;font-size:12px;color:var(--t3);font-style:italic'>No players yet</div>`}
             </div>`;
           }).join('')}
+
           <div style='margin-top:8px'><div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Add Player</div>
           <div style='display:flex;gap:8px'><input class='fi' id='maAddInput' style='flex:1;margin:0' placeholder='Player name...' onkeydown="if(event.key==='Enter'){const v=this.value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});this.value='';R();}}"><button class='btn btn-p btn-sm' onclick="const v=document.getElementById('maAddInput').value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});document.getElementById('maAddInput').value='';R();}">Add</button></div></div>
         </div>
