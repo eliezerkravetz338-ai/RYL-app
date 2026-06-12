@@ -2568,33 +2568,36 @@
       preview.style.display = 'block';
     }
     function executeTrade() {
-      const pidA = document.getElementById('tradePlayerA')?.value;
-      const pidB = document.getElementById('tradePlayerB')?.value;
-      if (!pidA) { alert('Select at least Player A'); return; }
+      const pidA = document.getElementById('trade-player-a')?.value;
+      const pidB = document.getElementById('trade-player-b')?.value;
+      if (!pidA) { alert('Select Player A'); return; }
       const l = STATE.league;
       const pA = l.players.find(p => p.id === pidA);
-      const pB = pidB ? l.players.find(p => p.id === pidB) : null;
-      const tA = l.teams.find(t => t.id === pA?.teamId);
-      const tB = pB ? l.teams.find(t => t.id === pB?.teamId) : null;
-      if (!pA || !tA) return;
-      if (pB && tA.id === tB?.id) { alert('Both players are on the same team'); return; }
+      const pB = pidB && pidB !== 'none' ? l.players.find(p => p.id === pidB) : null;
+      if (!pA) return;
+      if (pB && pA.teamId === pB.teamId) { alert('Both players are on the same team'); return; }
+      const tA = l.teams.find(t => t.id === pA.teamId);
+      const tB = pB ? l.teams.find(t => t.id === pB.teamId) : null;
       if (!STATE.league.tradeLog) STATE.league.tradeLog = [];
       const date = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
-      if (pB && tB) {
-        // Swap
-        const oldATid = pA.teamId;
-        const oldBTid = pB.teamId;
-        STATE.league.players = l.players.map(p => {
-          if (p.id === pidA) return { ...p, teamId: oldBTid };
-          if (p.id === pidB) return { ...p, teamId: oldATid };
-          return p;
-        });
-        STATE.league.tradeLog.push({ desc: `${pA.name} (${tA.name}) ⇄ ${pB.name} (${tB.name})`, date });
-      } else {
-        // Move A to free agents
-        STATE.league.players = l.players.map(p => p.id === pidA ? { ...p, teamId: null } : p);
-        STATE.league.tradeLog.push({ desc: `${pA.name} moved to Free Agents from ${tA.name}`, date });
-      }
+      const oldATid = pA.teamId;
+      const oldBTid = pB?.teamId || null;
+      // Swap or move
+      STATE.league.players = l.players.map(p => {
+        if (p.id === pidA) return { ...p, teamId: oldBTid, isCaptain: false, captainTeamId: null };
+        if (pB && p.id === pidB) return { ...p, teamId: oldATid, isCaptain: false, captainTeamId: null };
+        return p;
+      });
+      // Clear captainId from affected teams
+      STATE.league.teams = l.teams.map(t => {
+        if (t.captainId === pidA || (pB && t.captainId === pidB)) return { ...t, captainId: null };
+        return t;
+      });
+      const desc = pB
+        ? `${pA.name} (${tA?.name||'FA'}) ↔ ${pB.name} (${tB?.name||'FA'})`
+        : `${pA.name} moved from ${tA?.name||'FA'} to Free Agents`;
+      STATE.league.tradeLog.push({ desc, date });
+      saveState();
       R();
     }
     function forfeitGame(gid, winnerTid) {
@@ -6396,13 +6399,15 @@ async function assignCaptain(playerId, teamId) {
         <div style='margin-top:8px'>
           <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px'>Trades</div>
           <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:10px'>
-            <div style='display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px'>
-              <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>From Team</label><select class='fi' id='trade-team-a'><option value=''>Select team</option>${teamOpts}</select></div>
-              <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>To Team</label><select class='fi' id='trade-team-b'><option value=''>Free Agency</option>${teamOpts}</select></div>
-            </div>
-            <div style='display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px'>
-              <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Player A</label><select class='fi' id='trade-player-a'><option value=''>Select player</option>${l.players.map(p=>`<option value='${p.id}'>${p.name} (${l.teams.find(t=>t.id===p.teamId)?.name||'FA'})</option>`).join('')}</select></div>
-              <div style='flex:1;min-width:120px'><label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Player B (optional)</label><select class='fi' id='trade-player-b'><option value=''>None</option>${l.players.map(p=>`<option value='${p.id}'>${p.name} (${l.teams.find(t=>t.id===p.teamId)?.name||'FA'})</option>`).join('')}</select></div>
+            <div style='display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px'>
+              <div style='flex:1;min-width:140px'>
+                <label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Player</label>
+                <select class='fi' id='trade-player-a'><option value=''>Select player...</option>${l.players.filter(p=>p.teamId).map(p=>`<option value='${p.id}'>${p.name} — ${l.teams.find(t=>t.id===p.teamId)?.name||''}</option>`).join('')}</select>
+              </div>
+              <div style='flex:1;min-width:140px'>
+                <label style='font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px'>Swap with (optional)</label>
+                <select class='fi' id='trade-player-b'><option value='none'>Move to Free Agents</option>${l.players.filter(p=>p.teamId).map(p=>`<option value='${p.id}'>${p.name} — ${l.teams.find(t=>t.id===p.teamId)?.name||''}</option>`).join('')}</select>
+              </div>
             </div>
             <button class='btn btn-p btn-sm' onclick='executeTrade()'>Execute Trade</button>
           </div>
@@ -6686,7 +6691,19 @@ async function assignCaptain(playerId, teamId) {
     }
 
 
-    function beginManualAssign() { STATE.showManualAssign = true; STATE.manualSelections = {}; R(); }
+    function setPlayerTeam(pid, tid) {
+      STATE.league.players = STATE.league.players.map(p =>
+        p.id === pid ? { ...p, teamId: tid || null } : p
+      );
+      saveState();
+      // Visual feedback without full re-render
+      const row = document.getElementById('marow-' + pid);
+      if (row) row.style.borderColor = tid ? '#16a34a' : '#fde68a';
+      const check = document.getElementById('macheck-' + pid);
+      if (check) check.textContent = tid ? '✓' : '';
+    }
+
+    function beginManualAssign() { STATE.showManualAssign = true; R(); }
     function doEnterLeagueManual() { STATE.showManualAssign = false; beginSeasonTransition(); }
     function applyManualAssignments() {
       const sel = STATE.manualSelections || {};
@@ -6717,15 +6734,11 @@ async function assignCaptain(playerId, teamId) {
 
     function renderManualAssignment() {
       const l = STATE.league;
-      const sel = STATE.manualSelections || {};
       const unassigned = l.players.filter(p => !p.teamId && !l.teams.some(t => t.captainId === p.id));
-      const teamSizes = l.teams.map(t => ({ t, count: l.players.filter(p => p.teamId === t.id || t.captainId === p.id).length }));
-      const maxSize = Math.max(...teamSizes.map(x => x.count), 0);
-      const minSize = Math.min(...teamSizes.map(x => x.count), 0);
-      const uneven = maxSize - minSize > 1 && l.teams.length > 1;
-      const teamOpts = `<option value=''>Team...</option>` + l.teams.map(t => `<option value='${t.id}'>${t.name}</option>`).join('');
-      const captainOpts = `<option value=''>Team...</option>` + l.teams.map(t => `<option value='cap:${t.id}'>${t.name} (as Captain)</option>`).join('');
-      const pendingCount = Object.values(sel).filter(Boolean).length;
+      const assigned = l.players.filter(p => p.teamId || l.teams.some(t => t.captainId === p.id));
+      const teamSizes = l.teams.map(t => l.players.filter(p => p.teamId === t.id || t.captainId === p.id).length);
+      const uneven = teamSizes.length > 1 && Math.max(...teamSizes) - Math.min(...teamSizes) > 1;
+      const teamOpts = l.teams.map(t => `<option value='${t.id}'>${t.name}</option>`).join('');
 
       return `<div style='min-height:100vh;background:var(--f4)'>
         <div style='background:var(--n2);padding:14px 18px;display:flex;align-items:center;justify-content:space-between'>
@@ -6736,37 +6749,45 @@ async function assignCaptain(playerId, teamId) {
           <button class='btn btn-p btn-sm' onclick='doEnterLeagueManual()'>Enter League →</button>
         </div>
         <div style='padding:16px'>
-          ${uneven ? `<div style='background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:12px'><div style='font-size:13px;font-weight:700;color:#b45309'>⚠️ Teams are uneven</div></div>` : ''}
+          ${uneven ? `<div style='background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;font-weight:700;color:#b45309'>⚠️ Teams are uneven</div>` : ''}
 
-          ${unassigned.length ? `<div style='margin-bottom:20px'>
-            <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px'>
-              <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Unassigned (${unassigned.length})</div>
-              ${pendingCount ? `<button class='btn btn-p btn-sm' onclick='applyManualAssignments()'>✓ Assign ${pendingCount} Selected</button>` : `<span style='font-size:11px;color:var(--t3)'>Select teams below</span>`}
-            </div>
-            ${unassigned.map(p => `<div style='background:#fff;border:1.5px solid ${sel[p.id]?'var(--g)':'#fde68a'};border-radius:10px;display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:6px;flex-wrap:wrap'>
-              <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1;min-width:100px'>${p.name}</span>
-              <select onchange="if(!STATE.manualSelections)STATE.manualSelections={};STATE.manualSelections['${p.id}']=this.value;document.getElementById('assignBtn').textContent='✓ Assign '+Object.values(STATE.manualSelections).filter(Boolean).length+' Selected';document.getElementById('assignBtn').style.display=Object.values(STATE.manualSelections).filter(Boolean).length?'block':'none'" style='padding:6px 10px;border:1.5px solid ${sel[p.id]?'var(--g)':'var(--b2)'};border-radius:8px;font-size:12px;font-weight:600;color:var(--t1);background:#fff;min-width:120px'>
-                ${teamOpts}
+          ${unassigned.length ? `
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Unassigned (${unassigned.length})</div>
+          ${unassigned.map(p => `
+            <div id='marow-${p.id}' style='background:#fff;border:1.5px solid #fde68a;border-radius:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:6px'>
+              <span style='font-size:13px;font-weight:600;color:var(--t1);flex:1'>${p.name}</span>
+              <select onchange='setPlayerTeam("${p.id}",this.value)' style='padding:7px 10px;border:1.5px solid var(--b2);border-radius:8px;font-size:13px;font-weight:600;color:var(--t1);background:#fff;min-width:130px'>
+                <option value=''>Pick a team...</option>${teamOpts}
               </select>
-              <select onchange="if(!STATE.manualSelections)STATE.manualSelections={};STATE.manualSelections['${p.id}']='cap:'+this.value;document.getElementById('assignBtn').textContent='✓ Assign '+Object.values(STATE.manualSelections).filter(Boolean).length+' Selected';document.getElementById('assignBtn').style.display='block'" style='padding:6px 10px;border:1.5px solid var(--b2);border-radius:8px;font-size:12px;font-weight:600;color:var(--t2);background:#fff;min-width:120px'>
-                <option value=''>Make Captain of...</option>${l.teams.map(t=>`<option value='${t.id}'>${t.name}</option>`).join('')}
-              </select>
+              <span id='macheck-${p.id}' style='font-size:16px;color:#16a34a;font-weight:900;min-width:16px'></span>
             </div>`).join('')}
-            <button id='assignBtn' class='btn btn-p btn-sm' style='width:100%;margin-top:8px;display:${pendingCount?'block':'none'}' onclick='applyManualAssignments()'>✓ Assign ${pendingCount} Selected</button>
-          </div>` : `<div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;margin-bottom:20px'><div style='font-size:13px;font-weight:700;color:#15803d'>✅ All players assigned!</div></div>`}
+          <div style='height:16px'></div>` : `
+          <div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;font-weight:700;color:#15803d'>✅ All players assigned!</div>`}
 
-          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Teams</div>
+          <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Teams (${assigned.length} assigned)</div>
           ${l.teams.map(t => {
             const roster = l.players.filter(p => p.teamId === t.id || t.captainId === p.id);
             const captain = t.captainId ? l.players.find(p => p.id === t.captainId) : null;
-            return `<div style='background:#fff;border:1.5px solid var(--b1);border-radius:12px;overflow:hidden;margin-bottom:10px'>
-              <div style='display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--f4);border-bottom:1px solid var(--b1)'>${teamAvatar(t,'tm-av')}<div style='flex:1'><div style='font-size:14px;font-weight:800;color:var(--t1)'>${t.name}</div><div style='font-size:11px;color:var(--t3)'>${captain?'Captain: '+captain.name:'No captain'} · ${roster.length} players</div></div></div>
-              ${roster.map(p => `<div style='display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--b1)'><span style='font-size:13px;font-weight:${t.captainId===p.id?700:500};color:var(--t1);flex:1'>${p.name}${t.captainId===p.id?' <span style="font-size:9px;font-weight:800;background:var(--gm);color:var(--gd);border-radius:4px;padding:1px 5px">CAP</span>':''}</span><button class="btn btn-o btn-xs" style="color:var(--red)" onclick="STATE.league.players=STATE.league.players.map(pl=>pl.id==='${p.id}'?{...pl,teamId:null}:pl);saveState();R()">Remove</button></div>`).join('') || `<div style='padding:12px 14px;font-size:12px;color:var(--t3);font-style:italic'>No players yet</div>`}
+            return `<div style='background:#fff;border:1px solid var(--b1);border-radius:10px;overflow:hidden;margin-bottom:8px'>
+              <div style='display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--f4);border-bottom:1px solid var(--b1)'>
+                ${teamAvatar(t,'tm-av')}
+                <span style='font-size:13px;font-weight:800;color:var(--t1);flex:1'>${t.name}</span>
+                <span style='font-size:11px;color:var(--t3)'>${roster.length} players</span>
+              </div>
+              ${roster.map(p => `<div style='display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--b1)'>
+                <span style='font-size:12px;font-weight:${t.captainId===p.id?700:400};color:var(--t1);flex:1'>${p.name}${t.captainId===p.id?' (CAP)':''}</span>
+                <button onclick="setPlayerTeam('${p.id}','');R()" style='font-size:10px;font-weight:700;color:var(--red);background:none;border:none;cursor:pointer'>Remove</button>
+              </div>`).join('') || `<div style='padding:10px 14px;font-size:11px;color:var(--t3);font-style:italic'>Empty</div>`}
             </div>`;
           }).join('')}
 
-          <div style='margin-top:8px'><div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Add Player</div>
-          <div style='display:flex;gap:8px'><input class='fi' id='maAddInput' style='flex:1;margin:0' placeholder='Player name...' onkeydown="if(event.key==='Enter'){const v=this.value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});this.value='';R();}}"><button class='btn btn-p btn-sm' onclick="const v=document.getElementById('maAddInput').value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});document.getElementById('maAddInput').value='';R();}">Add</button></div></div>
+          <div style='margin-top:12px'>
+            <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px'>Add Player</div>
+            <div style='display:flex;gap:8px'>
+              <input class='fi' id='maAddInput' style='flex:1;margin:0' placeholder='Player name...' onkeydown="if(event.key==='Enter'){const v=this.value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});this.value='';R();}}">
+              <button class='btn btn-p btn-sm' onclick="const v=document.getElementById('maAddInput').value.trim();if(v){STATE.league.players.push({id:uid(),name:v,teamId:null});document.getElementById('maAddInput').value='';R();}">Add</button>
+            </div>
+          </div>
         </div>
         ${STATE.modal ? renderModal() : ''}
       </div>`;
@@ -6776,7 +6797,7 @@ async function assignCaptain(playerId, teamId) {
       const lobbyTab = STATE.commLobbyTab || 'captains';
       const tabs = [
         { key: 'captains', icon: '👥', label: 'Captains' },
-        { key: 'draft', icon: '🎯', label: 'Draft Setup' },
+        { key: 'draft', icon: l.draftMode === 'manual' ? '✋' : '🎯', label: l.draftMode === 'manual' ? 'Assign' : 'Draft Setup' },
         { key: 'settings', icon: '⚙️', label: 'Settings' },
       ];
       const tabBar = `<div style='display:flex;border-bottom:2px solid var(--b1);background:#fff;position:sticky;top:0;z-index:10'>
@@ -6797,7 +6818,7 @@ async function assignCaptain(playerId, teamId) {
           <div style='background:${allSet?"#f0fdf4":"#fffbeb"};border:1.5px solid ${allSet?"#86efac":"#fde68a"};border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px'>
             <div>
               <div style='font-size:14px;font-weight:800;color:${allSet?"#15803d":"#b45309"}'>${allSet?"✅ All captains assigned — ready to draft!":"⚡ "+captainCount+" of "+l.teams.length+" captains assigned"}</div>
-              <div style='font-size:11px;color:${allSet?"#16a34a":"#92400e"};margin-top:2px'>${allSet?"Hit Start Draft in the Draft Setup tab when ready.":"Assign a captain to each team below."}</div>
+              <div style='font-size:11px;color:${allSet?"#16a34a":"#92400e"};margin-top:2px'>${allSet?(l.draftMode==='manual'?"Tap ✋ Assign tab when ready to place players.":"Hit Start Draft in the Draft tab when ready."):"Assign a captain to each team below."}</div>
             </div>
           </div>
 
@@ -6856,36 +6877,37 @@ async function assignCaptain(playerId, teamId) {
 
       else if (lobbyTab === 'draft') {
         const ds = l.draftState;
+        const isManual = l.draftMode === 'manual';
         const quickTimes = [30, 60, 90, 120];
-        content = `
-          <!-- START DRAFT -->
+        content = isManual ? `
+          <!-- MANUAL MODE -->
+          <div style='background:var(--n2);border-radius:12px;padding:18px;margin-bottom:20px;text-align:center'>
+            <div style='font-size:32px;margin-bottom:8px'>✋</div>
+            <div style='font-size:16px;font-weight:800;color:#fff;margin-bottom:6px'>Manual Assignment</div>
+            <div style='font-size:12px;color:rgba(255,255,255,.5);margin-bottom:18px'>You assign each player to their team directly — no draft needed.</div>
+            <button class='btn btn-p btn-sm' style='width:100%' onclick='beginManualAssign()'>Assign Players →</button>
+          </div>
+          <div style='text-align:center'>
+            <button onclick="STATE.league.draftMode='draft';R()" style='background:none;border:none;color:var(--t3);font-size:12px;cursor:pointer;text-decoration:underline'>Switch to Snake Draft instead</button>
+          </div>` : `
+          <!-- DRAFT MODE -->
           <div style='background:var(--n2);border-radius:12px;padding:18px;margin-bottom:20px'>
-            <div style='display:flex;gap:8px;margin-bottom:14px'>
-              <button onclick="STATE.league.draftMode='draft';R()" style='flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:700;border:1.5px solid ${(!l.draftMode||l.draftMode==='draft')?'#4ade80':'rgba(255,255,255,.2)'};background:${(!l.draftMode||l.draftMode==='draft')?'rgba(74,222,128,.15)':'transparent'};color:${(!l.draftMode||l.draftMode==='draft')?'#4ade80':'rgba(255,255,255,.5)'};cursor:pointer'>🎯 Draft</button>
-              <button onclick="STATE.league.draftMode='manual';R()" style='flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:700;border:1.5px solid ${l.draftMode==='manual'?'#4ade80':'rgba(255,255,255,.2)'};background:${l.draftMode==='manual'?'rgba(74,222,128,.15)':'transparent'};color:${l.draftMode==='manual'?'#4ade80':'rgba(255,255,255,.5)'};cursor:pointer'>✋ Manual Assignment</button>
-            </div>
-            <div style='font-size:11px;color:rgba(255,255,255,.4);margin-bottom:14px'>${l.draftMode==='manual'?'You will assign each player to a team manually.':'Snake draft — captains pick players in order.'}</div>
-            <div style='font-size:14px;font-weight:800;color:#fff;margin-bottom:6px'>${ds?.status==='done'?"Draft Complete ✓":ds?"Draft in Progress":"Ready to start?"}</div>
+            <div style='font-size:14px;font-weight:800;color:#fff;margin-bottom:6px'>${ds?.status==='done'?"Draft Complete ✓":ds?"Draft in Progress":"Ready to start the draft?"}</div>
+            <div style='font-size:11px;color:rgba(255,255,255,.5);margin-bottom:14px'>${ds?.status==='done'?"All picks made.":ds?"Picks: "+(ds.picks?.length||0)+" of "+(ds.total||0):"Snake draft — captains pick in order."}</div>
             <div style='display:flex;gap:8px;flex-wrap:wrap'>
-              ${!ds ? (l.draftMode==='manual'
-                ? `<button class='btn btn-p btn-sm' onclick='beginManualAssign()'>✋ Assign Players</button>`
-                : `<button class='btn btn-p btn-sm' onclick='beginDraftTransition()'>▶ Start Draft</button><button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Sim Draft</button>`)
+              ${!ds ? `<button class='btn btn-p btn-sm' onclick='beginDraftTransition()'>▶ Start Draft</button><button class='btn btn-o btn-sm' onclick='confirmSimDraft()'>Sim Draft</button>`
                 : ds.status==='active'?`<button class='btn btn-o btn-sm' onclick='pauseDraft()'>⏸ Pause</button>`
                 : ds.status==='paused'?`<button class='btn btn-p btn-sm' onclick='resumeDraft()'>▶ Resume</button>`
-                : `<button class='btn btn-p btn-sm' onclick='beginSeasonTransition()'>Enter League →</button><button class='btn btn-o btn-sm' onclick="STATE.appTab='draft';R()">Review Draft</button>`}
-              ${ds ? `<button class='btn btn-o btn-sm' style='color:var(--red);border-color:var(--red)' onclick='resetDraftBoard()'>Reset Draft</button>` : ''}
+                : `<button class='btn btn-p btn-sm' onclick='beginSeasonTransition()'>Enter League →</button>`}
+              ${ds ? `<button class='btn btn-o btn-sm' style='color:var(--red);border-color:var(--red)' onclick='resetDraftBoard()'>Reset</button>` : ''}
             </div>
           </div>
-
-          <!-- TIMER -->
           <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;padding:14px;margin-bottom:16px'>
             <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px'>Pick Timer</div>
             <div style='display:flex;gap:8px;flex-wrap:wrap'>
               ${quickTimes.map(sec=>`<button class='btn ${l.timerSecs===sec?'btn-p':'btn-o'} btn-sm' onclick='STATE.league.timerSecs=${sec};R()'>${sec}s</button>`).join('')}
             </div>
           </div>
-
-          <!-- DRAFT ORDER -->
           <div style='background:#fff;border:1px solid var(--b1);border-radius:12px;overflow:hidden;margin-bottom:16px'>
             <div style='padding:12px 14px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between'>
               <div style='font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px'>Draft Order</div>
@@ -6906,6 +6928,9 @@ async function assignCaptain(playerId, teamId) {
                 </div>` : ''}
               </div>`;
             }).join('')}
+          </div>
+          <div style='text-align:center'>
+            <button onclick="STATE.league.draftMode='manual';STATE.commLobbyTab='draft';R()" style='background:none;border:none;color:var(--t3);font-size:12px;cursor:pointer;text-decoration:underline'>Switch to Manual Assignment instead</button>
           </div>`;
       }
 
