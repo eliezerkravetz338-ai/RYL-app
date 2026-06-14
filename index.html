@@ -6187,6 +6187,21 @@ async function assignCaptain(playerId, teamId) {
     }
 
     function renderCommGameDay(l) {
+      // Playoffs are active — Game Day is replaced by playoff scoring
+      if (l.status === 'playoffs') {
+        const pc = l.playoffConfig;
+        const totalGames = pc?.bracket?.flatMap(r => r.games).length || 0;
+        const doneGames = pc?.bracket?.flatMap(r => r.games).filter(g => g.status === 'final').length || 0;
+        return `
+          <div style='background:linear-gradient(135deg,#0c0900,#1a1100);border-radius:12px;padding:18px;margin-bottom:16px;text-align:center'>
+            <div style='font-size:28px;margin-bottom:8px'>🏆</div>
+            <div style='font-size:16px;font-weight:800;color:#f59e0b;margin-bottom:4px'>Playoffs Are Live</div>
+            <div style='font-size:12px;color:rgba(255,255,255,.5);margin-bottom:16px'>${doneGames} of ${totalGames} games complete</div>
+            <button class='btn btn-p btn-sm' style='width:100%' onclick="STATE.appTab='playoffs';R()">Go to Playoff Bracket →</button>
+          </div>
+          <div style='font-size:11px;color:var(--t3);text-align:center'>Score playoff games from the Playoffs tab or Commissioner → League tab</div>`;
+      }
+
       const sd = l.gameDays || [];
       const currentDay = l.currentDayGameNum || 1;
       const todayGames = l.games.filter(g => g.gameNum === currentDay);
