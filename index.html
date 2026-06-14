@@ -3111,7 +3111,45 @@
     // ── PLAYER WAITING SCREEN ──────────────────────────────────────
     function renderWaiting() {
       const l = STATE.league;
+      const isManual = l.draftMode === 'manual';
       const pool = (l.players || []).filter(p => !p.isCaptain);
+      const myPlayer = l.players.find(p => p.userId === STATE.user?.id);
+      const myTeam = myPlayer?.teamId ? l.teams.find(t => t.id === myPlayer.teamId) : null;
+
+      // Manual mode — player has been assigned
+      if (isManual && myTeam) {
+        return `<div style='min-height:100vh;background:var(--f8)'>
+          <div style='background:linear-gradient(135deg,#07110b,#0b1220,#111827);padding:24px 20px 28px'>
+            <div style='font-size:10px;font-weight:800;color:rgba(255,255,255,.4);letter-spacing:1.6px;text-transform:uppercase;margin-bottom:6px'>🏀 ${l.name}</div>
+            <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:32px;color:#fff;line-height:1;margin-bottom:6px'>You're on a team!</div>
+            <div style='font-size:13px;color:rgba(255,255,255,.5)'>The commissioner will start the season soon.</div>
+          </div>
+          <div style='margin:16px;background:#fff;border-radius:14px;padding:16px;border:1px solid var(--b1)'>
+            <div style='font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px'>Your Team</div>
+            <div style='display:flex;align-items:center;gap:10px'>
+              ${teamAvatar(myTeam, 'tm-av-lg')}
+              <div style='font-size:20px;font-weight:800;color:var(--t1)'>${myTeam.name}</div>
+            </div>
+          </div>
+        </div>`;
+      }
+
+      // Manual mode — not yet assigned
+      if (isManual) {
+        return `<div style='min-height:100vh;background:var(--f8)'>
+          <div style='background:linear-gradient(135deg,#07110b,#0b1220,#111827);padding:24px 20px 28px'>
+            <div style='font-size:10px;font-weight:800;color:rgba(255,255,255,.4);letter-spacing:1.6px;text-transform:uppercase;margin-bottom:6px'>🏀 ${l.name}</div>
+            <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:32px;color:#fff;line-height:1;margin-bottom:6px'>You're in!</div>
+            <div style='font-size:13px;color:rgba(255,255,255,.5)'>The commissioner is putting together the teams. Hang tight.</div>
+          </div>
+          <div style='margin:16px;background:#fff;border-radius:14px;padding:18px;border:1px solid var(--b1);text-align:center'>
+            <div style='font-size:32px;margin-bottom:10px'>⏳</div>
+            <div style='font-size:15px;font-weight:700;color:var(--t1);margin-bottom:6px'>Waiting to be assigned</div>
+            <div style='font-size:13px;color:var(--t3)'>The commissioner will assign you to a team shortly. You'll see your team here once it's done.</div>
+          </div>
+        </div>`;
+      }
+
       return `
         <div style='min-height:100vh;background:var(--f8)'>
           <!-- Header -->
@@ -6335,7 +6373,7 @@ async function assignCaptain(playerId, teamId) {
         ${!allCaptainsSet ? `<div style='background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px'>
           <div>
             <div style='font-size:13px;font-weight:800;color:#b45309'>⚡ ${captainCount} of ${totalTeams} captains assigned</div>
-            <div style='font-size:11px;color:#92400e;margin-top:2px'>Assign captains so teams are ready to draft</div>
+            <div style='font-size:11px;color:#92400e;margin-top:2px'>Assign captains so teams are ready to ${l.draftMode === 'manual' ? 'get started' : 'draft'}</div>
           </div>
           <button class='btn btn-gh btn-sm' onclick='refreshLeagueFromDB()'>↻ Refresh</button>
         </div>` : ''}
