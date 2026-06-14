@@ -2256,7 +2256,13 @@
       R();
     }
 
-    function deleteLeague(leagueId) {
+    async function deleteLeague(leagueId) {
+      // Remove from Supabase first — both the league and all memberships
+      if (sb) {
+        await sb.from('league_members').delete().eq('league_id', leagueId);
+        await sb.from('leagues').delete().eq('id', leagueId);
+      }
+      // Then clean up local state
       STATE.leagues = STATE.leagues.filter(l => l.id !== leagueId);
       localStorage.setItem(LEAGUES_KEY, JSON.stringify(STATE.leagues));
       if (STATE.leagues.length > 0) {
