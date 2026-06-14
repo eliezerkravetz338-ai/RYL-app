@@ -6604,7 +6604,18 @@ async function assignCaptain(playerId, teamId) {
       const ds = l.draftState;
       const draftDone = l.status === 'season' || l.status === 'playoffs' || l.status === 'complete';
 
-      // Post-season: show compact recap only
+      // Manual assignment mode — no draft content at all
+      if (l.draftMode === 'manual') {
+        return `<div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;display:flex;align-items:center;gap:12px'>
+          <div style='font-size:28px'>✋</div>
+          <div>
+            <div style='font-size:14px;font-weight:800;color:#15803d'>Manual Assignment used</div>
+            <div style='font-size:12px;color:#16a34a'>Players were assigned directly to teams — no draft was held.</div>
+          </div>
+        </div>`;
+      }
+
+      // Post-draft: show compact recap only
       if (draftDone && ds) {
         return `
           <div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px'>
