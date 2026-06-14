@@ -6217,13 +6217,11 @@ async function assignCaptain(playerId, teamId) {
           statusActions = `<span style='font-size:10px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,.1);padding:2px 8px;border-radius:20px'>Postponed</span>
             <button class='btn btn-o btn-xs' onclick='reinstateGame("${g.id}")'>Reinstate</button>`;
         } else if (g.status === 'final') {
-          statusActions = `<span style='font-size:10px;font-weight:700;color:var(--gd)'>✓ ${g.hs}–${g.as}</span>
-            <button class='btn btn-o btn-xs' onclick='scoreGame("${g.id}")'>Edit</button>`;
+          statusActions = `<span style='font-size:11px;font-weight:700;color:var(--gd)'>✓ ${g.hs}–${g.as} Final</span>
+            <button class='btn btn-o btn-xs' onclick='scoreGame("${g.id}")'>Edit Score</button>`;
         } else {
           statusActions = `<input type='time' value='${to24(g.time||selDay?.time||"14:00")}' onchange="updateGameTime('${g.id}',from24(this.value))" style='padding:4px 8px;border:1px solid var(--b1);border-radius:6px;font-size:11px;color:var(--t2);background:var(--f4);width:88px'>
-            <button class='btn btn-p btn-xs' onclick='scoreGame("${g.id}")'>Score</button>
-            <button class='btn btn-o btn-xs' style='color:#f59e0b;border-color:#f59e0b' onclick='postponeGame("${g.id}")'>Postpone</button>
-            <button class='btn btn-o btn-xs' style='color:var(--red);border-color:var(--red)' onclick='openForfeitModal("${g.id}")'>Forfeit</button>`;
+            <span style='font-size:10px;color:var(--t3)'>${g.court||''}</span>`;
         }
         return `<div style='background:#fff;border-bottom:1px solid var(--b1);padding:12px 14px'>
           <div style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px'>${teamSelects}</div>
