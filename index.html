@@ -6376,10 +6376,10 @@ async function assignCaptain(playerId, teamId) {
             }).join('')}
             ${needsCaptain ? `<div style='padding:12px 14px;background:rgba(245,158,11,.04);display:flex;align-items:center;gap:8px'>
               <span style='font-size:12px;color:#b45309;font-weight:700'>Assign captain:</span>
-              ${l.players.filter(pl => !pl.isCaptain && !l.teams.some(tt => tt.captainId === pl.id)).length
-                ? `<select id='cap-sel-${t.id}' class='fi' style='display:inline-block;flex:1;min-width:0'><option value=''>Pick a player...</option>${l.players.filter(pl => !pl.isCaptain && !l.teams.some(tt => tt.captainId === pl.id)).map(pl=>`<option value='${pl.id}'>${pl.name}</option>`).join('')}</select>
+              ${l.players.filter(pl => pl.teamId === t.id && !l.teams.some(tt => tt.captainId === pl.id)).length
+                ? `<select id='cap-sel-${t.id}' class='fi' style='display:inline-block;flex:1;min-width:0'><option value=''>Pick a player...</option>${l.players.filter(pl => pl.teamId === t.id && !l.teams.some(tt => tt.captainId === pl.id)).map(pl=>`<option value='${pl.id}'>${pl.name}</option>`).join('')}</select>
                    <button class='btn btn-p btn-sm' onclick="const v=document.getElementById('cap-sel-${t.id}').value;if(v)assignCaptain(v,'${t.id}')">Assign</button>`
-                : `<span style='font-size:12px;color:var(--t3)'>No unassigned players available</span>`}
+                : `<span style='font-size:12px;color:var(--t3)'>No players on this team yet</span>`}
             </div>` : ''}
           </div>`;
         }).join('')}
@@ -7053,7 +7053,6 @@ async function assignCaptain(playerId, teamId) {
         </div>
         ${tabBar}
         <div style='padding:16px'>${content}</div>
-        ${STATE.modal ? renderModal() : ''}
       </div>`;
     }
     
@@ -7187,9 +7186,9 @@ async function assignCaptain(playerId, teamId) {
     function openMovePlayer(pid) {
       const l = STATE.league;
       const player = l.players.find(p => p.id === pid);
-      if (!player || player.teamId || player.isCaptain || l.teams.some(t => t.captainId === player.id)) return l;
+      if (!player) return;
       const currentTeam = l.teams.find(t => t.id === player.teamId);
-      openModal('Move Player', `<div class='fg'><label class='fl'>Player</label><input class='fi' value='${player.name}' disabled></div><div class='fg'><label class='fl'>Current Team</label><input class='fi' value='${currentTeam ? currentTeam.name : 'Free Agent'}' disabled></div><div class='fg'><label class='fl'>Move To</label><select id='moveTeamId' class='fi'><option value=''>Free Agent Pool</option>${l.teams.map(t => `<option value='${t.id}' ${player.teamId===t.id?'selected':''}>${t.name}</option>`).join('')}</select></div>`, `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Cancel</button><button class='btn btn-p btn-sm' onclick="saveMovePlayer('${pid}')">Save Move</button>`);
+      openModal('Assign Player', `<div class='fg'><label class='fl'>Player</label><input class='fi' value='${player.name}' disabled></div><div class='fg'><label class='fl'>Current Team</label><input class='fi' value='${currentTeam ? currentTeam.name : 'Free Agent'}' disabled></div><div class='fg' style='margin-bottom:0'><label class='fl'>Assign To</label><select id='moveTeamId' class='fi'><option value=''>Free Agent Pool</option>${l.teams.map(t => `<option value='${t.id}' ${player.teamId===t.id?'selected':''}>${t.name}</option>`).join('')}</select></div>`, `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Cancel</button><button class='btn btn-p btn-sm' onclick="saveMovePlayer('${pid}')">Save</button>`);
     }
     function saveMovePlayer(pid) {
       const player = STATE.league.players.find(p => p.id === pid);
