@@ -1771,11 +1771,8 @@
 
       // If logged in, persist to Supabase (skip during wizard setup)
       if (STATE.user && STATE.activeLeagueId && STATE.league && STATE.screen !== 'wizard') {
-        if (_saving) return;
-        _saving = true;
         const saveId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
         _lastSaveId = saveId;
-        setTimeout(() => { _saving = false; }, 300);
         const { error: saveErr } = await sb.from('leagues').update({
           name: STATE.league.name || 'My League',
           data: { ...STATE.league, _saveId: saveId },
@@ -1792,6 +1789,17 @@
           localStorage.setItem(STORAGE_KEY, JSON.stringify(getSerializableState()));
         } catch(e) {}
       }
+    }
+
+    // Coalesce the many per-render saves into one write after activity settles.
+    // Explicit `await saveState()` callers still write immediately and are untouched.
+    function queueSave() {
+      clearTimeout(_saveTimer);
+      _saveTimer = setTimeout(() => { saveState(); }, 500);
+    }
+    // Write any pending change right now (used before the tab is hidden/closed).
+    function flushSave() {
+      if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; saveState(); }
     }
 
     async function loadState() {
@@ -1863,7 +1871,7 @@
         .from('leagues')
         .select('id, name, data')
         .eq('id', STATE.activeLeagueId)
-        .single();
+        .maybeSingle();
       if (league) {
         const updated = { ...league.data, id: league.id, name: league.name };
         delete updated._saveId;
@@ -1948,7 +1956,7 @@
       }
 
       STATE.user = data.user;
-      const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+      const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
       STATE.profile = profile;
       try { localStorage.removeItem('ryl_app_state_original_ui_clean_v2'); localStorage.removeItem('ryl_leagues_v1'); localStorage.removeItem('ryl_active_league_v1'); } catch(e) {}
       await loadState();
@@ -2173,6 +2181,7 @@
     let _realtimeChannel = null;
     let _saving = false;
     let _lastSaveId = null;
+    let _saveTimer = null;
 
     function subscribeToLeague(leagueId) {
       if (_realtimeChannel) _realtimeChannel.unsubscribe();
@@ -8068,11 +8077,14 @@ async function assignCaptain(playerId, teamId) {
         }
       } if (STATE.screen === 'myleagues') return renderMyLeagues(); if (STATE.screen === 'landing') return renderLanding(); if (STATE.screen === 'wizard') return renderWizard(); if (STATE.screen === 'join') return renderJoin(); if (STATE.screen === 'app') return renderMainApp(); return renderMyLeagues(); }
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && STATE.activeLeagueId && STATE.user && STATE.screen !== 'wizard') {
+      if (document.visibilityState === 'hidden') {
+        flushSave();
+      } else if (document.visibilityState === 'visible' && STATE.activeLeagueId && STATE.user && STATE.screen !== 'wizard') {
         _saving = false;
         refreshLeagueFromDB();
       }
     });
+    window.addEventListener('beforeunload', () => { flushSave(); });
 
     document.addEventListener('click', (e) => {
       if (STATE.showLeagueSwitcher && !e.target.closest('.league-switcher-root')) {
@@ -8084,7 +8096,7 @@ async function assignCaptain(playerId, teamId) {
     function R() {
       try {
         document.getElementById('app').innerHTML = renderApp();
-        saveState();
+        queueSave();
       } catch (err) {
         console.error('RYL render error:', err.message, err.stack);
         if (STATE.screen === 'wizard') {
@@ -8149,7 +8161,7 @@ async function assignCaptain(playerId, teamId) {
       const { data: { session } } = await sb.auth.getSession();
       if (session?.user) {
         STATE.user = session.user;
-        const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+        const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
         STATE.profile = profile;
         await loadState();
         if (STATE.activeLeagueId) subscribeToLeague(STATE.activeLeagueId);
