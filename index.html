@@ -1743,6 +1743,19 @@
         gap: 10px !important;
       }
 
+      /* Stack any two-column grid on mobile */
+      .mob-stack {
+        grid-template-columns: 1fr !important;
+        padding: 10px 14px 0 !important;
+        gap: 10px !important;
+      }
+
+      /* Hide league switcher + sign out from top nav — lives in bottom Profile tab */
+      .league-switcher-root { display: none !important; }
+      .nav-right > button:not([onclick*="showProfile"]) { display: none !important; }
+      /* Season badge also hide on mobile to clean up top bar */
+      .nav-right > span { display: none !important; }
+
       .home-hero {
         margin: 10px 14px 0 !important;
         padding: 14px 16px !important;
@@ -5184,7 +5197,7 @@
       </div>` : '';
 
       // ── 4 & 5. Today's games + Activity ──
-      const twoColHtml = `<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px 0'>
+      const twoColHtml = `<div class='mob-stack' style='display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px 0'>
         ${renderSeasonHomeGames(l, todayGames, currentDay)}
         ${renderSeasonHomeActivity(l)}
       </div><div style='height:18px'></div>`;
@@ -5259,7 +5272,7 @@
         </div>
 
         <!-- Two column layout -->
-        <div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px 0'>
+        <div class='mob-stack' style='display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px 0'>
           ${renderSeasonHomeGames(l, todayGames, currentDay)}
           ${renderSeasonHomeActivity(l)}
         </div>
@@ -6211,7 +6224,7 @@
         </div>
 
         <!-- Two column: upcoming games + activity -->
-        <div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px 0'>
+        <div class='mob-stack' style='display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px 0'>
           <div class='card home-card'>
             <div class='chd'><h3>Playoff Schedule</h3><button onclick="STATE.appTab='playoffs';R()" style='padding:4px 10px;border-radius:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);font-size:11px;font-weight:700;cursor:pointer'>View Bracket</button></div>
             <div class='cbd' style='padding:0'>
@@ -8036,7 +8049,7 @@ async function assignCaptain(playerId, teamId) {
         </div>
 
         <!-- Two column: standings + actions -->
-        <div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px 0'>
+        <div class='mob-stack' style='display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px 0'>
           <!-- Final standings -->
           <div class='card home-card'>
             <div class='chd'><h3>Final Standings</h3><button class='btn btn-o btn-xs' onclick="STATE.appTab='standings';R()">Full View</button></div>
