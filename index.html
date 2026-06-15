@@ -4966,7 +4966,12 @@
       if (l.status === 'playoffs' || l.status === 'complete') return renderPlayoffSchedule();
     if (!STATE.schedGame) STATE.schedGame = l.currentDayGameNum || 1;
       const currentDay = l.currentDayGameNum || 1;
-      const myTeamId = STATE.memberTeamId || l.players.find(p => p.userId === STATE.user?.id || p.id === STATE.user?.id)?.teamId;
+      // Only commissioners and captains get scoring buttons — plain players are view-only
+      const myTeamId = STATE.memberRole === 'commissioner'
+        ? null
+        : STATE.memberRole === 'captain'
+        ? (STATE.memberTeamId || l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); })?.id)
+        : null;
       const maxDay = l.gameDays?.length || 1;
       const selDay = STATE.schedGame;
       const games = l.games.filter(g => g.gameNum === selDay);
