@@ -1740,6 +1740,7 @@
       commTab: 'gameday',            // active commissioner tools tab
       commLobbyTab: 'captains',      // active lobby commissioner tab
       teamJustAssigned: null,        // teamId just assigned to this player (triggers banner)
+      guideDismissed: {},            // which guide banners the commissioner has dismissed, keyed by stage
     };
 
     function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -7079,7 +7080,101 @@ async function assignCaptain(playerId, teamId) {
           <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:22px;color:#fff'>${l.name}</div>
         </div>
         ${tabBar}
-        <div style='padding:16px'>${content}</div>
+        <div style='padding:16px'>${commissionerGuide(l)}${content}</div>
+      </div>`;
+    }
+
+    function commissionerGuide(l) {
+      if (!l) return '';
+      const ds = l.draftState;
+      const currentDay = l.currentDayGameNum || 1;
+      const totalDays = l.gameDays?.length || 0;
+      const captainCount = l.teams.filter(t => t.captainId).length;
+      const totalTeams = l.teams.length;
+      const todayGames = l.games.filter(g => g.gameNum === currentDay);
+      const needsScoring = todayGames.filter(g => g.status !== 'final' && g.status !== 'postponed').length;
+      const allTodayDone = todayGames.length > 0 && todayGames.every(g => g.status === 'final' || g.status === 'postponed');
+      const allRegDone = l.games.length > 0 && l.games.filter(g => g.status !== 'postponed').every(g => g.status === 'final');
+      const pc = l.playoffConfig;
+
+      // Determine current guide stage key + message
+      let key = null, icon = '💡', guideMsg = '';
+
+      if (l.status === 'lobby') {
+        if (captainCount === 0) {
+          key = 'lobby_no_captains';
+          icon = '👥';
+          guideMsg = `Assign a captain to each team, then share the league code so they can join on their own device.`;
+        } else if (captainCount < totalTeams) {
+          key = 'lobby_some_captains';
+          icon = '⏳';
+          guideMsg = `${captainCount} of ${totalTeams} captains assigned — share the league code with the rest to get them in.`;
+        } else if (l.draftMode === 'manual') {
+          key = 'lobby_ready_manual';
+          icon = '✋';
+          guideMsg = `All captains are in — head to the Assign tab to place players on teams, then enter the league.`;
+        } else {
+          key = 'lobby_ready_draft';
+          icon = '🎯';
+          guideMsg = `All ${totalTeams} captains are in — go to Draft Setup and hit Start Draft when everyone is at their device.`;
+        }
+      } else if (l.status === 'draft') {
+        if (!ds) {
+          key = 'draft_not_started';
+          icon = '🎯';
+          guideMsg = `Draft is ready — hit Start Draft from the Commissioner tab when captains are ready.`;
+        } else if (ds.status === 'active') {
+          key = 'draft_active';
+          icon = '🟢';
+          guideMsg = `Draft is live — ${ds.picks?.length || 0} of ${ds.total} picks made. Use Auto Pick if a captain is slow or away.`;
+        } else if (ds.status === 'paused') {
+          key = 'draft_paused';
+          icon = '⏸';
+          guideMsg = `Draft is paused — hit Resume when captains are ready for the next pick.`;
+        } else if (ds.status === 'done') {
+          key = 'draft_done';
+          icon = '✅';
+          guideMsg = `Draft complete — hit Enter League to start the season and unlock the full schedule.`;
+        }
+      } else if (l.status === 'season') {
+        if (needsScoring > 0) {
+          key = `season_day_${currentDay}_scoring`;
+          icon = '🏀';
+          guideMsg = `${needsScoring} game${needsScoring !== 1 ? 's' : ''} need${needsScoring === 1 ? 's' : ''} scoring on Day ${currentDay} — tap Score on each game in Game Day.`;
+        } else if (allTodayDone && currentDay < totalDays) {
+          key = `season_day_${currentDay}_done`;
+          icon = '➡️';
+          guideMsg = `Day ${currentDay} is complete — advance to Day ${currentDay + 1} when you're ready to run the next slate.`;
+        } else if (allRegDone && !pc?.bracket) {
+          key = 'season_playoffs_setup';
+          icon = '🏆';
+          guideMsg = `Regular season is finished — set up your playoff bracket in Commissioner → League to keep things going.`;
+        } else if (pc?.bracket && l.status !== 'playoffs') {
+          key = 'season_playoffs_ready';
+          icon = '🏆';
+          guideMsg = `Bracket is built — hit Enter Playoff Mode whenever you're ready to crown a champion.`;
+        }
+      } else if (l.status === 'playoffs') {
+        const remainingPlayoff = pc?.bracket?.flatMap(r => r.games).filter(g => g.home && g.away && g.status !== 'final').length || 0;
+        if (remainingPlayoff > 0) {
+          key = 'playoffs_in_progress';
+          icon = '🏆';
+          guideMsg = `${remainingPlayoff} playoff game${remainingPlayoff !== 1 ? 's' : ''} remaining — score them in the Playoffs tab or Game Day.`;
+        }
+      } else if (l.status === 'complete') {
+        key = null; // no guide needed when season is fully done
+      }
+
+      if (!key) return '';
+      if (STATE.guideDismissed[key]) return '';
+
+      return `<div style='display:flex;align-items:flex-start;gap:12px;background:linear-gradient(135deg,#f0fdf4,#ecfdf5);border:1.5px solid rgba(22,163,74,.25);border-left:4px solid var(--g);border-radius:14px;padding:13px 14px;margin-bottom:14px;position:relative'>
+        <span style='font-size:20px;flex-shrink:0;margin-top:1px'>${icon}</span>
+        <div style='flex:1;min-width:0'>
+          <div style='font-size:11px;font-weight:800;color:var(--gd);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px'>What to do next</div>
+          <div style='font-size:13px;font-weight:600;color:#14532d;line-height:1.5'>${guideMsg}</div>
+        </div>
+        <button onclick="STATE.guideDismissed['${key}']=true;R()" style='flex-shrink:0;background:none;border:none;color:rgba(22,163,74,.5);font-size:18px;line-height:1;cursor:pointer;padding:0 0 0 6px' title='Dismiss'>×</button>
       </div>`;
     }
 
@@ -7127,10 +7222,9 @@ async function assignCaptain(playerId, teamId) {
           </div>
         </div>
         ${tabBar}
-        <div style='padding:16px'>${content}</div>
+        <div style='padding:16px'>${commissionerGuide(l)}${content}</div>
       </div>`;
     }
-    
     function confirmRegenerateSchedule() {
       const hasScores = STATE.league.games.some(g => g.status === 'final' || g.status === 'live');
       const msg = hasScores
