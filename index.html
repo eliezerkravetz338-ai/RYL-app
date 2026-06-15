@@ -2754,7 +2754,6 @@
       const g = STATE.league.games.find(x => x.id === gid);
       if (!g) return;
       g[side] = Math.max(0, (g[side] || 0) + delta);
-      saveState();
       R();
     }
 
@@ -5723,7 +5722,6 @@
       // but we always store scores relative to g.home/g.away — so no flip needed here.
       // The flip only affects DISPLAY and winner calculation, not storage.
       g[side] = Math.max(0, (g[side] || 0) + delta);
-      saveState();
       R();
     }
 
