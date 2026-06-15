@@ -1741,9 +1741,66 @@
       commLobbyTab: 'captains',      // active lobby commissioner tab
       teamJustAssigned: null,        // teamId just assigned to this player (triggers banner)
       guideDismissed: {},            // which guide banners the commissioner has dismissed, keyed by stage
+      showProfile: false,            // whether profile/settings screen is open
+      profileEdit: null,             // profile fields being edited
+      onboardingDone: false,         // whether onboarding has been completed this session
     };
 
     function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+    const NBA_TEAMS = [
+      { name: 'Atlanta Hawks',           color: '#C8102E' },
+      { name: 'Boston Celtics',          color: '#007A33' },
+      { name: 'Brooklyn Nets',           color: '#000000' },
+      { name: 'Charlotte Hornets',       color: '#1D1160' },
+      { name: 'Chicago Bulls',           color: '#CE1141' },
+      { name: 'Cleveland Cavaliers',     color: '#860038' },
+      { name: 'Dallas Mavericks',        color: '#00538C' },
+      { name: 'Denver Nuggets',          color: '#0E2240' },
+      { name: 'Detroit Pistons',         color: '#C8102E' },
+      { name: 'Golden State Warriors',   color: '#1D428A' },
+      { name: 'Houston Rockets',         color: '#CE1141' },
+      { name: 'Indiana Pacers',          color: '#002D62' },
+      { name: 'LA Clippers',             color: '#C8102E' },
+      { name: 'Los Angeles Lakers',      color: '#552583' },
+      { name: 'Memphis Grizzlies',       color: '#5D76A9' },
+      { name: 'Miami Heat',              color: '#98002E' },
+      { name: 'Milwaukee Bucks',         color: '#00471B' },
+      { name: 'Minnesota Timberwolves',  color: '#0C2340' },
+      { name: 'New Orleans Pelicans',    color: '#0C2340' },
+      { name: 'New York Knicks',         color: '#006BB6' },
+      { name: 'Oklahoma City Thunder',   color: '#007AC1' },
+      { name: 'Orlando Magic',           color: '#0077C0' },
+      { name: 'Philadelphia 76ers',      color: '#006BB6' },
+      { name: 'Phoenix Suns',            color: '#1D1160' },
+      { name: 'Portland Trail Blazers',  color: '#E03A3E' },
+      { name: 'Sacramento Kings',        color: '#5A2D81' },
+      { name: 'San Antonio Spurs',       color: '#C4CED4' },
+      { name: 'Toronto Raptors',         color: '#CE1141' },
+      { name: 'Utah Jazz',               color: '#002B5C' },
+      { name: 'Washington Wizards',      color: '#002B5C' },
+    ];
+
+    function getNbaColor(teamName) {
+      return NBA_TEAMS.find(t => t.name === teamName)?.color || '#16a34a';
+    }
+
+    function profileIsComplete(profile) {
+      if (!profile) return false;
+      return !!(profile.display_name && profile.position && profile.skill && profile.nba_team);
+    }
+
+    async function saveProfile(fields) {
+      if (!STATE.user) return;
+      const { error } = await sb.from('profiles').upsert({
+        id: STATE.user.id,
+        ...fields,
+      }, { onConflict: 'id' });
+      if (!error) {
+        STATE.profile = { ...STATE.profile, ...fields };
+      }
+      return !error;
+    }
 
     function getSerializableState() {
       return {
@@ -1929,9 +1986,10 @@
       try { localStorage.removeItem('ryl_app_state_original_ui_clean_v2'); localStorage.removeItem('ryl_leagues_v1'); localStorage.removeItem('ryl_active_league_v1'); } catch(e) {}
       await loadState();
       STATE.authLoading = false;
-      if (STATE.authIntent === 'create') { STATE.authIntent = null; createNewLeague(); }
-      else if (STATE.authIntent === 'join') { STATE.authIntent = null; STATE.screen = 'join'; R(); }
-      else { STATE.screen = STATE.leagues.length > 0 ? 'app' : 'landing'; R(); }
+      // New signup — send to onboarding to complete profile
+      STATE.profileEdit = { display_name: displayName };
+      STATE.screen = 'onboarding';
+      R();
     }
 
     async function signIn(email, password) {
@@ -1962,6 +2020,12 @@
       try { localStorage.removeItem('ryl_app_state_original_ui_clean_v2'); localStorage.removeItem('ryl_leagues_v1'); localStorage.removeItem('ryl_active_league_v1'); } catch(e) {}
       await loadState();
       STATE.authLoading = false;
+      // If profile is incomplete, send to onboarding first
+      if (!profileIsComplete(STATE.profile)) {
+        STATE.profileEdit = { display_name: STATE.profile?.display_name || '' };
+        STATE.screen = 'onboarding';
+        R(); return;
+      }
       if (STATE.authIntent === 'create') { STATE.authIntent = null; createNewLeague(); }
       else if (STATE.authIntent === 'join') { STATE.authIntent = null; STATE.screen = 'join'; R(); }
       else { STATE.screen = STATE.leagues.length > 0 ? 'app' : 'landing'; R(); }
@@ -3474,6 +3538,238 @@
       l.teams = l.teams.map(t => t.id === STATE.memberTeamId ? { ...t, name: val } : t);
       await saveState();
       R();
+    }
+
+    function renderOnboarding() {
+      const p = STATE.profileEdit || {};
+      const nbaColor = getNbaColor(p.nba_team);
+      const accentColor = p.nba_team ? nbaColor : '#16a34a';
+      const positions = ['Guard', 'Forward', 'Center'];
+      const skills = [1, 2, 3, 4, 5];
+
+      return `
+        <div style='min-height:100vh;background:linear-gradient(160deg,#07110b,#0b1220,#111827);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px'>
+          <div style='width:100%;max-width:420px'>
+            <!-- Header -->
+            <div style='text-align:center;margin-bottom:28px'>
+              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:36px;color:#fff;letter-spacing:-1px;margin-bottom:6px'>Welcome to RYL 🏀</div>
+              <div style='font-size:14px;color:rgba(255,255,255,.45);line-height:1.5'>Tell us a little about yourself so your league knows who you are.</div>
+            </div>
+
+            <!-- Card -->
+            <div style='background:#fff;border-radius:24px;padding:28px;box-shadow:0 24px 60px rgba(0,0,0,.4)'>
+
+              <!-- Preview avatar -->
+              <div style='text-align:center;margin-bottom:24px'>
+                <div style='width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,${accentColor},${accentColor}99);display:flex;align-items:center;justify-content:center;font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:30px;color:#fff;margin:0 auto;border:3px solid ${accentColor}44;box-shadow:0 0 0 6px ${accentColor}18;transition:all .3s'>
+                  ${(p.display_name||'?')[0].toUpperCase()}
+                </div>
+                ${p.nba_team ? `<div style='font-size:11px;font-weight:700;color:${accentColor};margin-top:8px'>${p.nba_team} fan</div>` : '<div style="font-size:11px;color:#94a3b8;margin-top:8px">Pick your NBA team to color your avatar</div>'}
+              </div>
+
+              <!-- Display name -->
+              <div style='margin-bottom:16px'>
+                <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px'>Your Name</label>
+                <input id='ob-name' type='text' placeholder='e.g. Eli Cohen' value='${p.display_name||''}' oninput="STATE.profileEdit={...STATE.profileEdit,display_name:this.value};R()" style='width:100%;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:15px;font-weight:600;color:#111;outline:none;box-sizing:border-box'>
+              </div>
+
+              <!-- Birthday -->
+              <div style='margin-bottom:16px'>
+                <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px'>Birthday</label>
+                <input id='ob-bday' type='date' value='${p.birthday||''}' oninput="STATE.profileEdit={...STATE.profileEdit,birthday:this.value}" style='width:100%;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;color:#111;outline:none;box-sizing:border-box;background:#fff'>
+              </div>
+
+              <!-- Position -->
+              <div style='margin-bottom:16px'>
+                <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px'>Position</label>
+                <div style='display:flex;gap:8px'>
+                  ${positions.map(pos => `<button onclick="STATE.profileEdit={...STATE.profileEdit,position:'${pos}'};R()" style='flex:1;padding:10px 0;border-radius:10px;font-size:13px;font-weight:700;border:2px solid ${p.position===pos?accentColor:'#e2e8f0'};background:${p.position===pos?accentColor+'18':'#fff'};color:${p.position===pos?accentColor:'#374151'};cursor:pointer;transition:all .15s'>${pos}</button>`).join('')}
+                </div>
+              </div>
+
+              <!-- Skill -->
+              <div style='margin-bottom:16px'>
+                <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px'>Skill Level <span style='color:#9ca3af;text-transform:none;letter-spacing:0;font-weight:500'>(1 = Beginner · 5 = Elite)</span></label>
+                <div style='display:flex;gap:8px'>
+                  ${skills.map(s => `<button onclick="STATE.profileEdit={...STATE.profileEdit,skill:${s}};R()" style='flex:1;padding:10px 0;border-radius:10px;font-size:16px;font-weight:800;border:2px solid ${p.skill===s?accentColor:'#e2e8f0'};background:${p.skill===s?accentColor+'18':'#fff'};color:${p.skill===s?accentColor:'#374151'};cursor:pointer'>${s}</button>`).join('')}
+                </div>
+              </div>
+
+              <!-- NBA Team -->
+              <div style='margin-bottom:24px'>
+                <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px'>Favorite NBA Team</label>
+                <div style='display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:200px;overflow-y:auto;padding-right:2px'>
+                  ${NBA_TEAMS.map(t => `<button onclick="STATE.profileEdit={...STATE.profileEdit,nba_team:'${t.name}'};R()" style='padding:7px 4px;border-radius:8px;font-size:10px;font-weight:700;border:2px solid ${p.nba_team===t.name?t.color:'#e2e8f0'};background:${p.nba_team===t.name?t.color+'18':'#fff'};color:${p.nba_team===t.name?t.color:'#374151'};cursor:pointer;text-align:center;line-height:1.3;transition:all .12s'>${t.name}</button>`).join('')}
+                </div>
+              </div>
+
+              <!-- Submit -->
+              <button onclick='submitOnboarding()' style='width:100%;padding:14px;background:${accentColor};color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;transition:background .2s' ${!p.display_name||!p.position||!p.skill||!p.nba_team?'disabled style="width:100%;padding:14px;background:#e2e8f0;color:#94a3b8;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:not-allowed"':''}>
+                Let's Go →
+              </button>
+              ${!p.display_name||!p.position||!p.skill||!p.nba_team ? `<div style='text-align:center;font-size:11px;color:#94a3b8;margin-top:8px'>Fill in all fields to continue</div>` : ''}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    async function submitOnboarding() {
+      const p = STATE.profileEdit || {};
+      if (!p.display_name || !p.position || !p.skill || !p.nba_team) return;
+      const ok = await saveProfile({
+        display_name: p.display_name,
+        birthday: p.birthday || null,
+        position: p.position,
+        skill: p.skill,
+        nba_team: p.nba_team,
+      });
+      if (ok) {
+        STATE.onboardingDone = true;
+        STATE.profileEdit = null;
+        // proceed to intended destination
+        if (STATE.authIntent === 'create') { STATE.authIntent = null; createNewLeague(); }
+        else if (STATE.authIntent === 'join') { STATE.authIntent = null; STATE.screen = 'join'; R(); }
+        else { STATE.screen = STATE.leagues.length > 0 ? 'app' : 'landing'; R(); }
+      }
+    }
+
+    function renderProfileScreen() {
+      const profile = STATE.profile || {};
+      const p = STATE.profileEdit || profile;
+      const nbaColor = getNbaColor(p.nba_team);
+      const accentColor = p.nba_team ? nbaColor : '#16a34a';
+      const positions = ['Guard', 'Forward', 'Center'];
+      const skills = [1, 2, 3, 4, 5];
+      const initials = (p.display_name || '?')[0].toUpperCase();
+      const isEditing = !!STATE.profileEdit;
+
+      return `
+        <div style='min-height:100vh;background:var(--f8)'>
+          <!-- Header -->
+          <div style='background:linear-gradient(135deg,${accentColor}dd,${accentColor}88,#111827);padding:32px 20px 28px;position:relative;overflow:hidden'>
+            <div style='position:absolute;inset:0;background:radial-gradient(circle at 15% 50%,rgba(255,255,255,.08),transparent 60%);pointer-events:none'></div>
+            <div style='position:relative;z-index:1;display:flex;align-items:center;gap:16px'>
+              <button onclick='STATE.showProfile=false;STATE.profileEdit=null;R()' style='width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0'>←</button>
+              <div style='flex:1'>
+                <div style='font-size:10px;font-weight:800;color:rgba(255,255,255,.6);letter-spacing:1.6px;text-transform:uppercase;margin-bottom:3px'>My Profile</div>
+                <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:28px;color:#fff;line-height:1'>${profile.display_name || 'Your Profile'}</div>
+              </div>
+              <!-- Avatar -->
+              <div style='width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.15);border:3px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:#fff;flex-shrink:0'>
+                ${initials}
+              </div>
+            </div>
+            <!-- NBA team badge -->
+            ${profile.nba_team ? `<div style='position:relative;z-index:1;margin-top:14px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:5px 12px'>
+              <span style='font-size:12px'>🏀</span>
+              <span style='font-size:12px;font-weight:700;color:#fff'>${profile.nba_team} fan</span>
+            </div>` : ''}
+          </div>
+
+          <!-- Profile info / edit form -->
+          <div style='padding:16px 18px'>
+
+            ${!isEditing ? `
+            <!-- VIEW MODE -->
+            <div style='background:#fff;border:1px solid var(--b1);border-radius:16px;overflow:hidden;box-shadow:var(--sh);margin-bottom:14px'>
+              <div style='padding:12px 16px;background:var(--f4);border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between'>
+                <div style='font-size:11px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.6px'>Profile Info</div>
+                <button onclick="STATE.profileEdit={...STATE.profile};R()" style='font-size:12px;font-weight:700;color:var(--g);background:var(--gm);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:4px 12px;cursor:pointer'>Edit</button>
+              </div>
+              ${[
+                ['Name', profile.display_name],
+                ['Birthday', profile.birthday ? new Date(profile.birthday+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : '—'],
+                ['Position', profile.position || '—'],
+                ['Skill Level', profile.skill ? '★'.repeat(profile.skill) + ` (${profile.skill}/5)` : '—'],
+                ['NBA Team', profile.nba_team || '—'],
+              ].map(([label, val]) => `
+                <div style='display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--b1)'>
+                  <span style='font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px'>${label}</span>
+                  <span style='font-size:14px;font-weight:600;color:var(--t1)'>${val}</span>
+                </div>`).join('')}
+            </div>` : `
+            <!-- EDIT MODE -->
+            <div style='background:#fff;border:1px solid var(--b1);border-radius:16px;overflow:hidden;box-shadow:var(--sh);margin-bottom:14px'>
+              <div style='padding:12px 16px;background:var(--f4);border-bottom:1px solid var(--b1)'>
+                <div style='font-size:11px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.6px'>Edit Profile</div>
+              </div>
+              <div style='padding:16px;display:flex;flex-direction:column;gap:14px'>
+                <div>
+                  <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px'>Name</label>
+                  <input type='text' value='${p.display_name||''}' oninput="STATE.profileEdit={...STATE.profileEdit,display_name:this.value}" style='width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-weight:600;color:#111;outline:none;box-sizing:border-box'>
+                </div>
+                <div>
+                  <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px'>Birthday</label>
+                  <input type='date' value='${p.birthday||''}' oninput="STATE.profileEdit={...STATE.profileEdit,birthday:this.value}" style='width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;color:#111;outline:none;box-sizing:border-box;background:#fff'>
+                </div>
+                <div>
+                  <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px'>Position</label>
+                  <div style='display:flex;gap:8px'>
+                    ${positions.map(pos => `<button onclick="STATE.profileEdit={...STATE.profileEdit,position:'${pos}'};R()" style='flex:1;padding:9px 0;border-radius:8px;font-size:13px;font-weight:700;border:2px solid ${p.position===pos?'var(--g)':'#e2e8f0'};background:${p.position===pos?'var(--gm)':'#fff'};color:${p.position===pos?'var(--gd)':'#374151'};cursor:pointer'>${pos}</button>`).join('')}
+                  </div>
+                </div>
+                <div>
+                  <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px'>Skill Level</label>
+                  <div style='display:flex;gap:8px'>
+                    ${skills.map(s => `<button onclick="STATE.profileEdit={...STATE.profileEdit,skill:${s}};R()" style='flex:1;padding:9px 0;border-radius:8px;font-size:15px;font-weight:800;border:2px solid ${p.skill===s?'var(--g)':'#e2e8f0'};background:${p.skill===s?'var(--gm)':'#fff'};color:${p.skill===s?'var(--gd)':'#374151'};cursor:pointer'>${s}</button>`).join('')}
+                  </div>
+                </div>
+                <div>
+                  <label style='font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px'>Favorite NBA Team</label>
+                  <div style='display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-height:180px;overflow-y:auto'>
+                    ${NBA_TEAMS.map(t => `<button onclick="STATE.profileEdit={...STATE.profileEdit,nba_team:'${t.name}'};R()" style='padding:6px 4px;border-radius:7px;font-size:10px;font-weight:700;border:2px solid ${p.nba_team===t.name?t.color:'#e2e8f0'};background:${p.nba_team===t.name?t.color+'18':'#fff'};color:${p.nba_team===t.name?t.color:'#374151'};cursor:pointer;line-height:1.3'>${t.name}</button>`).join('')}
+                  </div>
+                </div>
+                <div style='display:flex;gap:8px;padding-top:4px'>
+                  <button onclick="STATE.profileEdit=null;R()" style='flex:1;padding:11px;border-radius:10px;background:var(--f4);color:var(--t2);border:1px solid var(--b1);font-size:14px;font-weight:700;cursor:pointer'>Cancel</button>
+                  <button onclick='saveProfileEdits()' style='flex:2;padding:11px;border-radius:10px;background:var(--g);color:#fff;border:none;font-size:14px;font-weight:800;cursor:pointer'>Save Changes</button>
+                </div>
+              </div>
+            </div>`}
+
+            <!-- My Leagues -->
+            <div style='background:#fff;border:1px solid var(--b1);border-radius:16px;overflow:hidden;box-shadow:var(--sh);margin-bottom:14px'>
+              <div style='padding:12px 16px;background:var(--f4);border-bottom:1px solid var(--b1)'>
+                <div style='font-size:11px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.6px'>My Leagues</div>
+              </div>
+              ${(STATE.leagues||[]).map(l => {
+                const m = (STATE.allMemberships||[]).find(mb => mb.league_id === l.id);
+                const role = m?.role || 'commissioner';
+                const isActive = l.id === STATE.activeLeagueId;
+                return `<div style='display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--b1);background:${isActive?'var(--gm)':'#fff'}'>
+                  <div style='width:38px;height:38px;border-radius:10px;background:var(--n2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0'>🏀</div>
+                  <div style='flex:1;min-width:0'>
+                    <div style='font-size:13px;font-weight:700;color:${isActive?'var(--gd)':'var(--t1)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>${l.name||'Unnamed'}</div>
+                    <div style='font-size:11px;color:var(--t3);margin-top:1px;text-transform:capitalize'>${role}</div>
+                  </div>
+                  ${isActive
+                    ? `<span style='font-size:10px;font-weight:800;color:var(--gd);background:rgba(22,163,74,.12);border:1px solid rgba(22,163,74,.25);padding:3px 10px;border-radius:999px'>Active</span>`
+                    : `<button onclick="STATE.showProfile=false;STATE.profileEdit=null;switchLeague('${l.id}')" style='font-size:12px;font-weight:700;color:var(--g);background:var(--gm);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:5px 12px;cursor:pointer'>Switch</button>`}
+                </div>`;
+              }).join('') || '<div style="padding:20px;text-align:center;color:var(--t3);font-size:13px">No leagues yet</div>'}
+              <div style='padding:12px 16px'>
+                <button onclick="STATE.showProfile=false;STATE.profileEdit=null;createNewLeague()" style='width:100%;padding:10px;background:var(--gm);color:var(--gd);border:1.5px dashed rgba(22,163,74,.4);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer'>+ Create New League</button>
+              </div>
+            </div>
+
+            <!-- Sign out -->
+            <button onclick='confirmSignOut()' style='width:100%;padding:13px;border-radius:12px;background:#fff;color:var(--red);border:1.5px solid rgba(239,68,68,.3);font-size:14px;font-weight:700;cursor:pointer'>Sign Out</button>
+
+          </div>
+        </div>`;
+    }
+
+    async function saveProfileEdits() {
+      const p = STATE.profileEdit;
+      if (!p) return;
+      const ok = await saveProfile({
+        display_name: p.display_name,
+        birthday: p.birthday || null,
+        position: p.position,
+        skill: p.skill,
+        nba_team: p.nba_team,
+      });
+      if (ok) { STATE.profileEdit = null; R(); }
     }
 
     function renderConfirmEmail() {
@@ -8102,7 +8398,7 @@ async function assignCaptain(playerId, teamId) {
           <span style='color:rgba(255,255,255,.4);font-size:10px;flex-shrink:0'>${STATE.showLeagueSwitcher?'▲':'▼'}</span>
         </button>
       </div><div class='nav-tabs'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''} ${t.cls||''}' onclick="STATE.appTab='${t.k}';STATE.rosterFocus=null;STATE.draftRecap=false;R()">${t.lb}</button>`).join('')}</div></div><div class='nav-right' style='display:flex;align-items:center;gap:8px'>
-        ${STATE.user ? `<button onclick='confirmSignOut()' style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer' title='Sign out'>Sign Out</button>` : ''}
+        ${STATE.user ? `<button onclick='STATE.showProfile=true;STATE.profileEdit=null;R()' style='width:32px;height:32px;border-radius:50%;background:${getNbaColor(STATE.profile?.nba_team)};border:2px solid rgba(255,255,255,.25);color:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0' title='My Profile'>${(STATE.profile?.display_name||STATE.user.email||'?')[0].toUpperCase()}</button>` : ''}
             <span style='background:${(l.seasonHistory||[]).length>0?"rgba(245,158,11,.15)":"rgba(255,255,255,.07)"};border:1px solid ${(l.seasonHistory||[]).length>0?"rgba(245,158,11,.3)":"rgba(255,255,255,.1)"};color:${(l.seasonHistory||[]).length>0?"#f59e0b":"rgba(255,255,255,.4)"};font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px'>
               S${((l.seasonHistory||[]).length||0)+1}
             </span>
@@ -8140,6 +8436,8 @@ async function assignCaptain(playerId, teamId) {
     function renderApp() {
       if (STATE.authLoading) return `<div style='min-height:100vh;background:#07110b;display:flex;align-items:center;justify-content:center'><div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:32px;color:rgba(255,255,255,.3)'>RYL</div></div>`;
       if (STATE.screen === 'confirm_email') return renderConfirmEmail();
+      if (STATE.screen === 'onboarding') return renderOnboarding();
+      if (STATE.showProfile) return renderProfileScreen();
       if (STATE.screen === 'auth' || STATE.screen === 'signup') return renderAuth();
       if (STATE.screen === 'join' && STATE.user) return renderJoin();
       // Role-based routing
@@ -8248,6 +8546,8 @@ async function assignCaptain(playerId, teamId) {
     window.switchLeague = switchLeague;
     window.createNewLeague = createNewLeague;
     window.closeModal = closeModal;
+    window.submitOnboarding = submitOnboarding;
+    window.saveProfileEdits = saveProfileEdits;
 
     // ── Boot sequence ──────────────────────────────────────────────
     (async () => {
@@ -8262,6 +8562,11 @@ async function assignCaptain(playerId, teamId) {
         STATE.profile = profile;
         await loadState();
         if (STATE.activeLeagueId) subscribeToLeague(STATE.activeLeagueId);
+        // Prompt incomplete profiles on reopen
+        if (!profileIsComplete(STATE.profile)) {
+          STATE.profileEdit = { display_name: STATE.profile?.display_name || '' };
+          STATE.screen = 'onboarding';
+        }
       } else {
         // Not logged in — try localStorage for offline use
         try {
