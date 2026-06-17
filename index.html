@@ -1725,6 +1725,10 @@
       /* Hide top nav tabs on mobile — bottom nav handles navigation */
       .nav-tabs {
         display: none !important;
+        height: 0 !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        margin: 0 !important;
       }
 
       /* Slim the top nav on mobile */
@@ -3845,7 +3849,7 @@
             <div class='mob-league-sub' style='font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;display:none'>${l.name||''}</div>
           </div>
         </div>
-        <div class='nav-tabs'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''}' onclick="STATE.appTab='${t.k}';R()">${t.lb}</button>`).join('')}</div>
+        <div class='nav-tabs' style='overflow:hidden'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''}' onclick="STATE.appTab='${t.k}';R()">${t.lb}</button>`).join('')}</div>
         <div class='nav-right' style='display:flex;align-items:center;gap:6px'>
           ${STATE.leagues.length > 1 ? `<button onclick="STATE.showLeagueSwitcher=!STATE.showLeagueSwitcher;R()" style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer'>Leagues ${STATE.showLeagueSwitcher?'▲':'▼'}</button>` : ''}
           <button onclick='confirmSignOut()' style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer'>Sign Out</button>
@@ -5613,8 +5617,9 @@
       const l = STATE.league;
       if (l.status === 'playoffs' || l.status === 'complete') return renderPlayoffSchedule();
       const currentDay = l.currentDayGameNum || 1;
-      // Auto-advance: if the selected day is fully done and a newer day exists, snap to current
-      if (!STATE.schedGame) STATE.schedGame = currentDay;
+      // Always snap to current day if schedGame is behind it
+      if (!STATE.schedGame || STATE.schedGame < currentDay) STATE.schedGame = currentDay;
+      // Also advance if selected day is fully done and current is ahead
       const selDayGames = l.games.filter(g => g.gameNum === STATE.schedGame);
       const selDayDone = selDayGames.length > 0 && selDayGames.every(g => g.status === 'final' || g.status === 'postponed');
       if (selDayDone && currentDay > STATE.schedGame) STATE.schedGame = currentDay;
