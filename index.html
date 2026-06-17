@@ -1877,12 +1877,26 @@
       }
 
       /* ── Mobile schedule ── */
+      /* On mobile: pull pill bar flush to bottom of dark header, no gap */
+      .sched-ph {
+        padding-bottom: 0 !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+      }
+
+      .day-pill-bar {
+        position: static !important;
+        z-index: auto !important;
+        margin: 12px -14px 0 !important;
+      }
+
       .sch-top,
       .ph,
       .rb {
         margin: 0 !important;
         border-radius: 0 !important;
         padding: 12px 14px !important;
+        box-shadow: none !important;
       }
 
       .sch-title,
@@ -5752,7 +5766,8 @@
       }).join('');
 
       return `
-        <div class='ph' style='margin-bottom:0;border-radius:var(--rx) var(--rx) 0 0'>
+        <div class='sched-wrap'>
+        <div class='ph sched-ph' style='margin-bottom:0;border-radius:var(--rx) var(--rx) 0 0'>
           <div style='display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px'>
             <div>
               <div style='font-size:10px;font-weight:800;color:rgba(255,255,255,.45);letter-spacing:1.6px;text-transform:uppercase;margin-bottom:4px'>Season</div>
@@ -5764,12 +5779,12 @@
               <button onclick='STATE.schedGame=Math.min(${maxDay},STATE.schedGame+1);R()' ${selDay>=maxDay?'disabled':''} style='width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.6);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:${selDay>=maxDay?"0.3":"1"}'>→</button>
             </div>
           </div>
-        </div>
 
-        <!-- Day selector bar -->
-        <div class='day-pill-bar' style='background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10'>
-          <div style='display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;border-top:1px solid #f1f5f9;'>
-            ${dayPills}
+          <!-- Day selector bar — inside dark header on mobile, no gap -->
+          <div class='day-pill-bar' style='background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10;margin:0 -22px -20px;margin-top:12px'>
+            <div style='display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;'>
+              ${dayPills}
+            </div>
           </div>
         </div>
 
@@ -5777,6 +5792,7 @@
         <div style='display:flex;flex-direction:column;gap:10px;padding:14px 18px 24px;background:#f8fafc'>
           ${gd ? `<div style='font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:2px'>${gd.courts?.filter(Boolean).join(' · ')||''}</div>` : ''}
           ${gameCards || `<div class='empty-s'><h3>No games scheduled</h3><p>Games for this day haven't been set up yet.</p></div>`}
+        </div>
         </div>`;
     }
 
