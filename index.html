@@ -6031,7 +6031,7 @@
           const currentTeam = l.teams.find(t => t.id === currentTid);
           const myLeagueTeam = l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); });
           const myTeamId = myLeagueTeam?.id || STATE.memberTeamId;
-          const isMyTurn = STATE.memberRole === 'captain' && !!myTeamId && myTeamId === currentTid;
+          const isMyTurn = (STATE.memberRole === 'captain' || (STATE.memberRole === 'commissioner' && !!myTeamId)) && myTeamId === currentTid;
           const isCapt = STATE.memberRole === 'captain';
           const currentRound = Math.floor(ds.idx / l.teams.length) + 1;
           const totalRounds = Math.ceil(ds.total / l.teams.length);
@@ -6189,7 +6189,7 @@
       const currentTeam = l.teams.find(t => t.id === currentTid);
           const myLeagueTeam = l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); });
           const myTeamId = myLeagueTeam?.id || STATE.memberTeamId;
-          const isMyTurn = STATE.memberRole === 'captain' && !!myTeamId && myTeamId === currentTid;
+          const isMyTurn = (STATE.memberRole === 'captain' || (STATE.memberRole === 'commissioner' && !!myTeamId)) && myTeamId === currentTid;
           const isCapt = STATE.memberRole === 'captain';
           const onClockBanner = isMyTurn && ds.status === 'active' ? `<div style='background:linear-gradient(90deg,#16a34a,#15803d);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:52px;z-index:50;box-shadow:0 4px 16px rgba(22,163,74,.35)'><div style='display:flex;align-items:center;gap:10px'><span style='width:10px;height:10px;border-radius:50%;background:#fff;animation:pulseDot 1.2s infinite;flex-shrink:0'></span><span style='font-size:15px;font-weight:800;color:#fff'>YOU'RE ON THE CLOCK</span><span style='font-size:13px;color:rgba(255,255,255,.75);font-weight:600'>— Make your pick!</span></div><span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:18px;color:#fff'>${currentTeam?.name||''}</span></div>` : '';
       const currentRound = Math.floor(ds.idx / l.teams.length) + 1;
