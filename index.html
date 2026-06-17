@@ -1717,7 +1717,12 @@
         border-radius: 10px;
       }
 
-      /* Hide the top nav tabs on mobile — keep logo + league name + avatar */
+      /* Sticky day/round pill bar — offset below the nav on mobile */
+      .day-pill-bar {
+        top: 44px !important;
+      }
+
+      /* Hide top nav tabs on mobile — bottom nav handles navigation */
       .nav-tabs {
         display: none !important;
       }
@@ -5755,7 +5760,7 @@
         </div>
 
         <!-- Day selector bar -->
-        <div style='background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10'>
+        <div class='day-pill-bar' style='background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10'>
           <div style='display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;border-top:1px solid #f1f5f9;'>
             ${dayPills}
           </div>
@@ -6590,7 +6595,7 @@
           </div>
         </div>
 
-        <div style='background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10'>
+        <div class='day-pill-bar' style='background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10'>
           <div style='display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;border-top:1px solid #f1f5f9'>
             ${roundPills}
           </div>
@@ -7930,6 +7935,8 @@ async function assignCaptain(playerId, teamId) {
         });
       });
       STATE.commSchedDay = newDayNum;
+      STATE.league.currentDayGameNum = newDayNum;
+      STATE.schedGame = newDayNum;
       saveState();
       R();
     }
