@@ -1827,6 +1827,11 @@
       /* Season badge also hide on mobile to clean up top bar */
       .nav-right > span { display: none !important; }
 
+      /* Show team + league name stacked in top nav on mobile */
+      .mob-league-sub { display: block !important; }
+      .mob-only { display: block !important; }
+      .mob-hide { display: none !important; }
+
       .home-hero {
         margin: 10px 14px 0 !important;
         padding: 14px 16px !important;
@@ -3830,7 +3835,10 @@
       return `<div class='nav' style='position:sticky;top:0;z-index:20'>
         <div style='display:flex;align-items:center;gap:8px;flex:1;min-width:0'>
           <div style='width:28px;height:28px;border-radius:50%;background:${myTeam?.color||"#16a34a"};flex-shrink:0'></div>
-          <span style='font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px'>${myTeam?.name||'My Team'}</span>
+          <div style='min-width:0'>
+            <div style='font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px'>${myTeam?.name||'My Team'}</div>
+            <div class='mob-league-sub' style='font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;display:none'>${l.name||''}</div>
+          </div>
         </div>
         <div class='nav-tabs'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''}' onclick="STATE.appTab='${t.k}';R()">${t.lb}</button>`).join('')}</div>
         <div class='nav-right' style='display:flex;align-items:center;gap:6px'>
@@ -3854,8 +3862,14 @@
       ];
       return `<div class='nav' style='position:sticky;top:0;z-index:20'>
         <div style='display:flex;align-items:center;gap:8px;flex:1;min-width:0'>
-          ${myTeam ? `<div style='width:28px;height:28px;border-radius:50%;background:${myTeam.color||"#16a34a"};flex-shrink:0'></div>
-          <span style='font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px'>${myTeam.name||'My Team'}</span>` : `<span class='logo-mark'>RYL</span>`}
+          ${myTeam
+            ? `<div style='width:28px;height:28px;border-radius:50%;background:${myTeam.color||"#16a34a"};flex-shrink:0'></div>
+               <div style='min-width:0'>
+                 <div style='font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px'>${myTeam.name||'My Team'}</div>
+                 <div class='mob-league-sub' style='font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;display:none'>${l.name||''}</div>
+               </div>`
+            : `<span class='logo-mark'>RYL</span>
+               <div class='mob-league-sub' style='font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;display:none'>${l.name||''}</div>`}
         </div>
         <div class='nav-tabs'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''}' onclick="STATE.appTab='${t.k}';R()">${t.lb}</button>`).join('')}</div>
         <div class='nav-right' style='display:flex;align-items:center;gap:6px'>
@@ -8734,12 +8748,22 @@ async function assignCaptain(playerId, teamId) {
         ? [{k:'home',lb:'Home'},{k:'commissioner',lb:'⚙️ Edit League'}]
         : isDraftPhase
         ? [{k:'home',lb:'Home'},{k:'draft',lb:isDraftLive?'🟢 Draft Room':'Draft Room',cls:isDraftLive?'live':''}]
-        : [{k:'home',lb:'Home'},{k:'standings',lb:'Standings'},{k:'schedule',lb:'Schedule'},{k:'rosters',lb:'Rosters'},...(isPlayoffs?[{k:'playoffs',lb:'🏆 Playoffs',cls:'live'}]:[]),{k:'commissioner',lb:'Commissioner'}]; const nav = `<div class='nav' ${isPlayoffs?"style='background:linear-gradient(135deg,#0c0900,#1a1100);border-bottom:1px solid rgba(245,158,11,.25)'":''}><div style='display:flex;align-items:center;gap:0;flex:1;overflow:hidden'><div style='display:flex;align-items:center;flex-shrink:0;cursor:pointer' onclick='goHome()'><span class='logo-mark' style='color:${isPlayoffs?"#f59e0b":""}'>RYL</span></div><span style='color:rgba(255,255,255,.18);font-size:13px;margin:0 7px'>/</span><div class='league-switcher-root' style='position:relative;margin-right:8px'>
-        <button onclick="STATE.showLeagueSwitcher=!STATE.showLeagueSwitcher;R()" style='display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:4px 10px;cursor:pointer;max-width:130px'>
-          <span style='font-size:11px;font-weight:700;color:rgba(255,255,255,.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px'>${l.name||'My League'}</span>
-          <span style='color:rgba(255,255,255,.4);font-size:10px;flex-shrink:0'>${STATE.showLeagueSwitcher?'▲':'▼'}</span>
-        </button>
-      </div><div class='nav-tabs'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''} ${t.cls||''}' onclick="STATE.appTab='${t.k}';STATE.rosterFocus=null;STATE.draftRecap=false;R()">${t.lb}</button>`).join('')}</div></div><div class='nav-right' style='display:flex;align-items:center;gap:8px'>
+        : [{k:'home',lb:'Home'},{k:'standings',lb:'Standings'},{k:'schedule',lb:'Schedule'},{k:'rosters',lb:'Rosters'},...(isPlayoffs?[{k:'playoffs',lb:'🏆 Playoffs',cls:'live'}]:[]),{k:'commissioner',lb:'Commissioner'}]; const nav = `<div class='nav' ${isPlayoffs?"style='background:linear-gradient(135deg,#0c0900,#1a1100);border-bottom:1px solid rgba(245,158,11,.25)'":''}><div style='display:flex;align-items:center;gap:0;flex:1;overflow:hidden;min-width:0'>
+        <!-- Desktop: RYL / League switcher -->
+        <div class='mob-hide' style='display:flex;align-items:center;flex-shrink:0;cursor:pointer' onclick='goHome()'><span class='logo-mark' style='color:${isPlayoffs?"#f59e0b":""}'>RYL</span></div>
+        <span class='mob-hide' style='color:rgba(255,255,255,.18);font-size:13px;margin:0 7px'>/</span>
+        <div class='league-switcher-root mob-hide' style='position:relative;margin-right:8px'>
+          <button onclick="STATE.showLeagueSwitcher=!STATE.showLeagueSwitcher;R()" style='display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:4px 10px;cursor:pointer;max-width:130px'>
+            <span style='font-size:11px;font-weight:700;color:rgba(255,255,255,.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px'>${l.name||'My League'}</span>
+            <span style='color:rgba(255,255,255,.4);font-size:10px;flex-shrink:0'>${STATE.showLeagueSwitcher?'▲':'▼'}</span>
+          </button>
+        </div>
+        <!-- Mobile: stacked league + role -->
+        <div class='mob-only' style='display:none;min-width:0'>
+          <div style='font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px'>${l.name||'My League'}</div>
+          <div style='font-size:10px;color:rgba(255,255,255,.4);font-weight:600;text-transform:uppercase;letter-spacing:.5px'>Commissioner</div>
+        </div>
+        <div class='nav-tabs'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''} ${t.cls||''}' onclick="STATE.appTab='${t.k}';STATE.rosterFocus=null;STATE.draftRecap=false;R()">${t.lb}</button>`).join('')}</div></div><div class='nav-right' style='display:flex;align-items:center;gap:8px'>
         ${STATE.user ? `<button onclick='STATE.showProfile=true;STATE.profileEdit=null;R()' style='width:32px;height:32px;border-radius:50%;background:${getNbaColor(STATE.profile?.nba_team)};border:2px solid rgba(255,255,255,.25);color:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0' title='My Profile'>${(STATE.profile?.display_name||STATE.user.email||'?')[0].toUpperCase()}</button>` : ''}
             <span style='background:${(l.seasonHistory||[]).length>0?"rgba(245,158,11,.15)":"rgba(255,255,255,.07)"};border:1px solid ${(l.seasonHistory||[]).length>0?"rgba(245,158,11,.3)":"rgba(255,255,255,.1)"};color:${(l.seasonHistory||[]).length>0?"#f59e0b":"rgba(255,255,255,.4)"};font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px'>
               S${((l.seasonHistory||[]).length||0)+1}
