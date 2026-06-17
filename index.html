@@ -5633,12 +5633,12 @@
       const l = STATE.league;
       if (l.status === 'playoffs' || l.status === 'complete') return renderPlayoffSchedule();
       const currentDay = l.currentDayGameNum || 1;
-      // Always snap to current day if schedGame is behind it
-      if (!STATE.schedGame || STATE.schedGame < currentDay) STATE.schedGame = currentDay;
-      // Also advance if selected day is fully done and current is ahead
+      // Only set schedGame if it has never been set — don't override user's explicit selection
+      if (!STATE.schedGame) STATE.schedGame = currentDay;
+      // Auto-advance only if the selected day is fully done AND user hasn't manually gone back
       const selDayGames = l.games.filter(g => g.gameNum === STATE.schedGame);
       const selDayDone = selDayGames.length > 0 && selDayGames.every(g => g.status === 'final' || g.status === 'postponed');
-      if (selDayDone && currentDay > STATE.schedGame) STATE.schedGame = currentDay;
+      if (selDayDone && currentDay > STATE.schedGame && !STATE._userPickedDay) STATE.schedGame = currentDay;
       // Only commissioners and captains get scoring buttons — plain players are view-only
       const myTeamId = STATE.memberRole === 'commissioner'
         ? null
@@ -5657,7 +5657,7 @@
         const hasLive = dg.some(g => g.status === 'live');
         const isCur = d === currentDay;
         const isSel = d === selDay;
-        return `<button onclick='STATE.schedGame=${d};R()' style='
+        return `<button onclick='STATE.schedGame=${d};STATE._userPickedDay=true;R()' style='
           flex-shrink:0;padding:8px 14px;border-radius:0;border:none;border-bottom:3px solid ${isSel?"#000":"transparent"};
           background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;
           min-width:60px'>
@@ -5775,8 +5775,8 @@
               <div class='ph-sub'>Game Day ${selDay} of ${maxDay}${gd?.time ? ' · ' + gd.time : ''}${gd?.courts?.filter(Boolean).length ? ' · ' + gd.courts.filter(Boolean).join(', ') : ''}</div>
             </div>
             <div style='display:flex;gap:4px'>
-              <button onclick='STATE.schedGame=Math.max(1,STATE.schedGame-1);R()' ${selDay<=1?'disabled':''} style='width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.6);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:${selDay<=1?"0.3":"1"}'>←</button>
-              <button onclick='STATE.schedGame=Math.min(${maxDay},STATE.schedGame+1);R()' ${selDay>=maxDay?'disabled':''} style='width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.6);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:${selDay>=maxDay?"0.3":"1"}'>→</button>
+              <button onclick='STATE.schedGame=Math.max(1,STATE.schedGame-1);STATE._userPickedDay=true;R()' ${selDay<=1?'disabled':''} style='width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.6);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:${selDay<=1?"0.3":"1"}'>←</button>
+              <button onclick='STATE.schedGame=Math.min(${maxDay},STATE.schedGame+1);STATE._userPickedDay=true;R()' ${selDay>=maxDay?'disabled':''} style='width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.6);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:${selDay>=maxDay?"0.3":"1"}'>→</button>
             </div>
           </div>
 
