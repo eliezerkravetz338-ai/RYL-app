@@ -2626,9 +2626,11 @@
         }, async payload => {
           // If this update is for the current user, refresh their role
           if (payload.new.user_id === STATE.user?.id) {
-            STATE.memberRole = payload.new.role;
+            // Never downgrade commissioner — they keep full access even when captaining
+            if (STATE.memberRole !== 'commissioner') {
+              STATE.memberRole = payload.new.role;
+            }
             STATE.memberTeamId = payload.new.team_id;
-            // Also refresh league data to get latest
             await refreshLeagueFromDB();
           }
         })
@@ -6882,8 +6884,17 @@ async function assignCaptain(playerId, teamId) {
       l.teams = l.teams.map(t => t.id === teamId ? { ...t, captainId: playerId, captainName: player.name, cap: player.name } : t);
       l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: true, captainTeamId: teamId, teamId: teamId } : p);
       await saveState();
-      await sb.from('league_members').update({ role: 'captain', team_id: teamId })
-        .eq('league_id', l.id).eq('user_id', player.userId || player.id);
+      // Never overwrite commissioner role — they keep full access even when captaining a team
+      const isCommissioner = player.userId === STATE.user?.id && STATE.memberRole === 'commissioner';
+      if (!isCommissioner) {
+        await sb.from('league_members').update({ role: 'captain', team_id: teamId })
+          .eq('league_id', l.id).eq('user_id', player.userId || player.id);
+      } else {
+        // Just update their team_id, keep role as commissioner
+        await sb.from('league_members').update({ team_id: teamId })
+          .eq('league_id', l.id).eq('user_id', player.userId || player.id);
+        STATE.memberTeamId = teamId;
+      }
       closeModal();
       R();
     }
@@ -6895,8 +6906,16 @@ async function assignCaptain(playerId, teamId) {
       l.teams = l.teams.map(t => t.captainId === playerId ? { ...t, captainId: null, captainName: null, cap: '' } : t);
       l.players = l.players.map(p => p.id === playerId ? { ...p, isCaptain: false, captainTeamId: null, teamId: null } : p);
       await saveState();
-      await sb.from('league_members').update({ role: 'player', team_id: null })
-        .eq('league_id', l.id).eq('user_id', player.userId || player.id);
+      // Never downgrade commissioner role
+      const isCommissioner = player.userId === STATE.user?.id && STATE.memberRole === 'commissioner';
+      if (!isCommissioner) {
+        await sb.from('league_members').update({ role: 'player', team_id: null })
+          .eq('league_id', l.id).eq('user_id', player.userId || player.id);
+      } else {
+        await sb.from('league_members').update({ team_id: null })
+          .eq('league_id', l.id).eq('user_id', player.userId || player.id);
+        STATE.memberTeamId = null;
+      }
       R();
     }
 
