@@ -5593,8 +5593,12 @@
     function renderSchedule() {
       const l = STATE.league;
       if (l.status === 'playoffs' || l.status === 'complete') return renderPlayoffSchedule();
-    if (!STATE.schedGame) STATE.schedGame = l.currentDayGameNum || 1;
       const currentDay = l.currentDayGameNum || 1;
+      // Auto-advance: if the selected day is fully done and a newer day exists, snap to current
+      if (!STATE.schedGame) STATE.schedGame = currentDay;
+      const selDayGames = l.games.filter(g => g.gameNum === STATE.schedGame);
+      const selDayDone = selDayGames.length > 0 && selDayGames.every(g => g.status === 'final' || g.status === 'postponed');
+      if (selDayDone && currentDay > STATE.schedGame) STATE.schedGame = currentDay;
       // Only commissioners and captains get scoring buttons — plain players are view-only
       const myTeamId = STATE.memberRole === 'commissioner'
         ? null
@@ -6855,7 +6859,12 @@ async function assignCaptain(playerId, teamId) {
       const todayGames = l.games.filter(g => g.gameNum === currentDay);
       const postponedGames = l.games.filter(g => g.status === 'postponed');
       const needsScoring = todayGames.some(g => g.status !== 'final' && g.status !== 'postponed');
-      const commSchedDay = STATE.commSchedDay || sd[0]?.num || 1;
+      // Auto-advance schedule selector to current day when selected day is fully done
+      if (!STATE.commSchedDay) STATE.commSchedDay = currentDay;
+      const selDayGamesComm = l.games.filter(g => g.gameNum === STATE.commSchedDay);
+      const selDayDoneComm = selDayGamesComm.length > 0 && selDayGamesComm.every(g => g.status === 'final' || g.status === 'postponed');
+      if (selDayDoneComm && currentDay > STATE.commSchedDay) STATE.commSchedDay = currentDay;
+      const commSchedDay = STATE.commSchedDay;
       const selDay = sd.find(d => d.num === commSchedDay);
       const sdGames = l.games.filter(g => g.gameNum === commSchedDay);
 
