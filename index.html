@@ -2064,6 +2064,31 @@
 
     function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
+    const TEAM_EMOJIS = ['🦅','🐺','🔥','⚡','👑','🦁','🐻','🦈','🌪️','💪','🏆','🐉','🦊','🐯','🦂','🌊','🏔️','⚔️','🛡️','🎯','🦋','🦏','🐊','🌙','☄️','🔱','💎','🗡️','🧊','🦬','🐴','🦃','🦉','🦚','🌋','🏹','🥊','🏀','🔰','🌟'];
+
+    function openEmojiPicker(teamId) {
+      const l = STATE.league;
+      const t = l.teams.find(x => x.id === teamId);
+      if (!t) return;
+      openModal('Pick Team Emoji',
+        `<div style='margin-bottom:10px;font-size:13px;color:var(--t2)'>Choose a mark for <strong>${t.name||'your team'}</strong>. Captains can change this too.</div>
+        <div style='display:grid;grid-template-columns:repeat(8,1fr);gap:6px'>
+          ${TEAM_EMOJIS.map(e => `<button onclick="setTeamEmoji('${teamId}','${e}')" style='width:100%;aspect-ratio:1;border-radius:10px;border:2px solid ${t.emoji===e?'var(--g)':'var(--b1)'};background:${t.emoji===e?'var(--gm)':'#fff'};font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center'>${e}</button>`).join('')}
+          <button onclick="setTeamEmoji('${teamId}','')" style='width:100%;aspect-ratio:1;border-radius:10px;border:2px solid var(--b1);background:#fff;font-size:11px;font-weight:700;color:var(--t3);cursor:pointer'>None</button>
+        </div>`,
+        `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Done</button>`
+      );
+    }
+
+    function setTeamEmoji(teamId, emoji) {
+      STATE.league.teams = STATE.league.teams.map(t => t.id === teamId ? { ...t, emoji } : t);
+      saveState();
+      closeModal();
+      R();
+    }
+    window.openEmojiPicker = openEmojiPicker;
+    window.setTeamEmoji = setTeamEmoji;
+
     const NBA_TEAMS = [
       { name: 'Atlanta Hawks',           color: '#C8102E' },
       { name: 'Boston Celtics',          color: '#007A33' },
@@ -3404,10 +3429,81 @@
       STATE.rosterFocus = null;
       STATE.modal = null;
       STATE.memberRole = 'commissioner';
-      createLeagueInDB(league).then(() => subscribeToLeague(league.id));
+      createLeagueInDB(league).then(() => {
+        subscribeToLeague(league.id);
+        // Ask commissioner if they want to join as a player
+        promptCommissionerJoinAsPlayer();
+      });
       saveState();
       R();
     }
+
+    function promptCommissionerJoinAsPlayer() {
+      const l = STATE.league;
+      const profile = STATE.profile;
+      const alreadyInPool = l.players.some(p => p.userId === STATE.user?.id || p.id === STATE.user?.id);
+      if (alreadyInPool) return;
+      openModal('Join as a Player?',
+        `<div style='text-align:center;padding:8px 0'>
+          <div style='font-size:32px;margin-bottom:10px'>🏀</div>
+          <div style='font-size:15px;font-weight:800;color:var(--t1);margin-bottom:6px'>Want to play in your own league?</div>
+          <div style='font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:16px'>You'll be added to the player pool and can be drafted like everyone else. You keep full commissioner access.</div>
+          <div style='display:flex;flex-direction:column;gap:10px'>
+            <div class='fg' style='text-align:left;margin-bottom:0'>
+              <label class='fl'>Your Name</label>
+              <input class='fi' id='comm-player-name' value='${profile?.display_name||''}' placeholder='Your name in the league'>
+            </div>
+            <div class='fg' style='text-align:left;margin-bottom:0'>
+              <label class='fl'>Skill Level <span style='color:var(--t3);text-transform:none;font-size:10px'>(1 = Beginner · 5 = Elite)</span></label>
+              <div style='display:flex;gap:8px'>
+                ${[1,2,3,4,5].map(s => `<button id='comm-skill-${s}' onclick='selectCommSkill(${s})' style='flex:1;padding:10px 0;border-radius:8px;font-size:16px;font-weight:800;border:2px solid ${profile?.skill===s?'var(--g)':'var(--b1)'};background:${profile?.skill===s?'var(--gm)':'#fff'};color:${profile?.skill===s?'var(--gd)':'#374151'};cursor:pointer'>${s}</button>`).join('')}
+              </div>
+            </div>
+          </div>
+        </div>`,
+        `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Skip</button>
+         <button class='btn btn-p btn-sm' onclick='commissionerJoinAsPlayer()'>Join as Player</button>`
+      );
+      // Pre-select skill from profile
+      if (profile?.skill) {
+        setTimeout(() => selectCommSkill(profile.skill), 100);
+      }
+    }
+
+    let _commSkill = 3;
+    function selectCommSkill(s) {
+      _commSkill = s;
+      [1,2,3,4,5].forEach(n => {
+        const btn = document.getElementById(`comm-skill-${n}`);
+        if (!btn) return;
+        btn.style.border = `2px solid ${n===s?'var(--g)':'var(--b1)'}`;
+        btn.style.background = n===s ? 'var(--gm)' : '#fff';
+        btn.style.color = n===s ? 'var(--gd)' : '#374151';
+      });
+    }
+
+    function commissionerJoinAsPlayer() {
+      const name = document.getElementById('comm-player-name')?.value?.trim();
+      if (!name) { alert('Please enter your name'); return; }
+      const l = STATE.league;
+      const newPlayer = {
+        id: STATE.user.id,
+        name,
+        skill: _commSkill || 3,
+        teamId: null,
+        userId: STATE.user.id,
+        position: STATE.profile?.position || null,
+      };
+      if (!l.players.find(p => p.userId === STATE.user.id || p.id === STATE.user.id)) {
+        l.players.push(newPlayer);
+      }
+      closeModal();
+      saveState();
+      R();
+    }
+    window.promptCommissionerJoinAsPlayer = promptCommissionerJoinAsPlayer;
+    window.selectCommSkill = selectCommSkill;
+    window.commissionerJoinAsPlayer = commissionerJoinAsPlayer;
     function simDraft() { const l = STATE.league; const simCaptainCount = l.teams.filter(t => t.captainId).length; let league = { ...l, status: 'draft', draftState: { status: 'active', idx: 0, order: l.draftOrder?.length === l.teams.length ? l.draftOrder : l.teams.map(t => t.id), picks: [], total: l.teams.length * l.ppt - simCaptainCount, secs: l.timerSecs, queue: [] } }; const total = league.teams.length * league.ppt - simCaptainCount;const avail = [...league.players.filter(p => !p.teamId && !(p.isCaptain || league.teams.some(t => t.captainId === p.id)))]; for (let i = 0; i < total && avail.length > 0; i++) { const n = league.teams.length; const rnd = Math.floor(league.draftState.idx / n); const pos = league.draftState.idx % n; const ord = rnd % 2 === 0 ? league.draftState.order : [...league.draftState.order].reverse(); const tid = ord[pos]; const player = avail.shift(); league = { ...league, players: league.players.map(p => p.id === player.id ? { ...p, teamId: tid } : p), draftState: { ...league.draftState, picks: [...league.draftState.picks, { num: league.draftState.idx + 1, tid, pn: player.name }], idx: league.draftState.idx + 1, secs: l.timerSecs } }; } league.draftState.status = 'done'; league.status = 'season'; league.seasonEntered = false; STATE.league = league; STATE.appTab = 'draft'; R(); }
     function confirmSimDraft() { openModal('Sim Draft?', `<div style='font-size:13px;color:var(--t2);line-height:1.6'>Are you sure you want to sim draft? This will finish the entire draft instantly.</div>`, `<button class='btn btn-gh btn-sm' onclick='closeModal()'>Cancel</button><button class='btn btn-p btn-sm' onclick='closeModal();simDraft()'>Yes - Sim Draft</button>`); }
     function confirmReset() {
@@ -3647,13 +3743,14 @@
 
       // MY TEAM tab
       const myTeamTab = `
-        <!-- Team name editor -->
+        <!-- Team name + emoji editor -->
         <div style='background:#fff;border-radius:14px;padding:14px;border:1px solid var(--b1);box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px'>
-          <div style='font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px'>Team Name</div>
-          <div style='display:flex;gap:8px'>
+          <div style='font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px'>Team Identity</div>
+          <div style='display:flex;gap:8px;margin-bottom:8px'>
             <input id='captain-team-name' value='${myTeam?.name||''}' placeholder='Enter team name...' style='flex:1;padding:9px 12px;border:1.5px solid var(--b1);border-radius:8px;font-size:14px;font-weight:600;color:var(--t1);outline:none;background:#fff'>
             <button onclick='saveCaptainTeamName()' style='padding:9px 16px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer'>Save</button>
           </div>
+          <button onclick="openEmojiPicker('${myTeam?.id}')" style='width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--b1);background:#fff;font-size:13px;font-weight:600;color:var(--t2);cursor:pointer'>${myTeam?.emoji ? `${myTeam.emoji} Change Team Mark` : '+ Add Team Mark (emoji)'}</button>
         </div>
 
         <!-- Roster -->
@@ -4430,7 +4527,9 @@
     }
     function teamAvatar(team, cls = '', style = '') {
       const identity = smartTeamIdentity(team, team?.color || '#64748b');
-      return `<div class='${cls}' style='background:${identity.gradient};color:#fff;${style}'>${identity.mark}</div>`;
+      const mark = team?.emoji || identity.mark;
+      const bg = team?.emoji ? (team?.color || '#16a34a') : identity.gradient;
+      return `<div class='${cls}' style='background:${bg};color:#fff;${style}'>${mark}</div>`;
     }
 
     function wizSetCourt(i, val) {
@@ -4487,6 +4586,7 @@
               <div class='sw-row'>
                 ${PAL.map(c => `<div class='sw ${t.color===c?'sel':''}' style='background:${c}' onclick="STATE.league.teams[${i}].color='${c}';R()"></div>`).join('')}
               </div>
+              <button onclick="openEmojiPicker('${t.id}')" style='margin-top:8px;width:100%;padding:6px;border-radius:8px;border:1.5px solid var(--b1);background:#fff;font-size:13px;font-weight:600;color:var(--t2);cursor:pointer'>${t.emoji ? `${t.emoji} Change Mark` : '+ Add Team Mark'}</button>
             </div>`).join('')}
         </div>`; }
 
@@ -7124,6 +7224,7 @@ async function assignCaptain(playerId, teamId) {
                 <div style='font-size:11px;color:${needsCaptain ? '#b45309' : 'var(--t3)'}'>${needsCaptain ? '⚡ No captain assigned' : `Captain: ${captain.name}`} · ${roster.length} player${roster.length!==1?'s':''}</div>
               </div>
               ${avgSkill ? `<div style='text-align:right;flex-shrink:0'><div style='font-size:14px;font-weight:800;color:#16a34a'>★${avgSkill}</div><div style='font-size:9px;color:var(--t3);text-transform:uppercase'>Avg</div></div>` : ''}
+              <button onclick="openEmojiPicker('${t.id}')" style='flex-shrink:0;padding:5px 10px;border-radius:8px;border:1px solid var(--b1);background:#fff;font-size:14px;cursor:pointer' title='Pick team emoji'>${t.emoji || '🏀'}</button>
             </div>
             ${roster.map(p => {
               const isCap = t.captainId === p.id;
