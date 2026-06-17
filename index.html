@@ -1917,17 +1917,19 @@
 
       /* ── Score modal pills — bigger tap targets ── */
       .score-pill {
-        padding: 12px 8px !important;
-        font-size: 14px !important;
+        padding: 14px 8px !important;
+        font-size: 16px !important;
+        font-weight: 900 !important;
         border-radius: 999px !important;
+        min-height: 50px !important;
       }
 
       .scoreboard-card {
-        gap: 10px !important;
+        gap: 8px !important;
       }
 
       .score-big {
-        font-size: 42px !important;
+        font-size: 38px !important;
       }
 
       /* ── Mobile rosters ── */
@@ -3868,7 +3870,7 @@
         <div class='nav-tabs' style='overflow:hidden'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''}' onclick="STATE.appTab='${t.k}';R()">${t.lb}</button>`).join('')}</div>
         <div class='nav-right' style='display:flex;align-items:center;gap:6px'>
           ${STATE.leagues.length > 1 ? `<button onclick="STATE.showLeagueSwitcher=!STATE.showLeagueSwitcher;R()" style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer'>Leagues ${STATE.showLeagueSwitcher?'▲':'▼'}</button>` : ''}
-          <button onclick='confirmSignOut()' style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer'>Sign Out</button>
+          ${STATE.user ? `<button onclick='STATE.showProfile=true;STATE.profileEdit=null;R()' style='width:30px;height:30px;border-radius:50%;background:${getNbaColor(STATE.profile?.nba_team)};border:2px solid rgba(255,255,255,.25);color:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0'>${(STATE.profile?.display_name||'?')[0].toUpperCase()}</button>` : ''}
         </div>
       </div>`;
     }
@@ -3899,7 +3901,7 @@
         <div class='nav-tabs'>${tabs.map(t => `<button class='ntab ${STATE.appTab===t.k?'on':''}' onclick="STATE.appTab='${t.k}';R()">${t.lb}</button>`).join('')}</div>
         <div class='nav-right' style='display:flex;align-items:center;gap:6px'>
           ${STATE.leagues.length > 1 ? `<button onclick="STATE.showLeagueSwitcher=!STATE.showLeagueSwitcher;R()" style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer'>Leagues ${STATE.showLeagueSwitcher?'▲':'▼'}</button>` : ''}
-          <button onclick='confirmSignOut()' style='background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer'>Sign Out</button>
+          ${STATE.user ? `<button onclick='STATE.showProfile=true;STATE.profileEdit=null;R()' style='width:30px;height:30px;border-radius:50%;background:${getNbaColor(STATE.profile?.nba_team)};border:2px solid rgba(255,255,255,.25);color:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0'>${(STATE.profile?.display_name||'?')[0].toUpperCase()}</button>` : ''}
         </div>
       </div>`;
     }
@@ -3918,14 +3920,21 @@
       const accentColor = p.nba_team ? nbaColor : '#16a34a';
       const positions = ['Guard', 'Forward', 'Center'];
       const skills = [1, 2, 3, 4, 5];
+      const isReturning = !!(STATE.profile?.display_name);
+      const greeting = isReturning
+        ? `Welcome back, ${STATE.profile.display_name} 👋`
+        : `Welcome to RYL 🏀`;
+      const subtitle = isReturning
+        ? `Just a few more details to complete your profile.`
+        : `Tell us a little about yourself so your league knows who you are.`;
 
       return `
         <div style='min-height:100vh;background:linear-gradient(160deg,#07110b,#0b1220,#111827);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px'>
           <div style='width:100%;max-width:420px'>
             <!-- Header -->
             <div style='text-align:center;margin-bottom:28px'>
-              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:36px;color:#fff;letter-spacing:-1px;margin-bottom:6px'>Welcome to RYL 🏀</div>
-              <div style='font-size:14px;color:rgba(255,255,255,.45);line-height:1.5'>Tell us a little about yourself so your league knows who you are.</div>
+              <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:36px;color:#fff;letter-spacing:-1px;margin-bottom:6px'>${greeting}</div>
+              <div style='font-size:14px;color:rgba(255,255,255,.45);line-height:1.5'>${subtitle}</div>
             </div>
 
             <!-- Card -->
@@ -5645,6 +5654,8 @@
         : STATE.memberRole === 'captain'
         ? (STATE.memberTeamId || l.teams.find(t => { const cap = l.players.find(p => p.id === t.captainId); return cap && (cap.userId === STATE.user?.id || cap.id === STATE.user?.id); })?.id)
         : null;
+      const myTeam = myTeamId ? l.teams.find(t => t.id === myTeamId) : null;
+      const myTeamColor = myTeam?.color || '#16a34a';
       const maxDay = l.gameDays?.length || 1;
       const selDay = STATE.schedGame;
       const games = l.games.filter(g => g.gameNum === selDay);
@@ -5753,7 +5764,7 @@
           </div>`;
         }
 
-        return `<div style='background:#fff;border:1px solid ${isLive?"#fca5a5":isMyGame?"rgba(22,163,74,.4)":"#e2e8f0"};border-radius:12px;overflow:hidden;box-shadow:${isLive?"0 0 0 2px rgba(239,68,68,.15),0 1px 4px rgba(0,0,0,.06)":isMyGame?"0 0 0 2px rgba(22,163,74,.1),0 1px 4px rgba(0,0,0,.06)":"0 1px 4px rgba(0,0,0,.06)"}'>
+        return `<div style='background:#fff;border:1px solid ${isLive?"#fca5a5":isMyGame?"rgba(22,163,74,.25)":"#e2e8f0"};border-left:${isMyGame?`4px solid ${myTeamColor}`:`1px solid ${isLive?"#fca5a5":"#e2e8f0"}`};border-radius:12px;overflow:hidden;box-shadow:${isLive?"0 0 0 2px rgba(239,68,68,.15),0 1px 4px rgba(0,0,0,.06)":isMyGame?"0 4px 12px rgba(0,0,0,.07)":"0 1px 4px rgba(0,0,0,.06)"}'>
           <!-- Status bar -->
           <div style='display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:${isLive?"#fff7f7":isMyGame?"rgba(22,163,74,.04)":"#fafafa"};border-bottom:1px solid ${isLive?"#fecaca":isMyGame?"rgba(22,163,74,.15)":"#f1f5f9"}'>
             ${statusLabel}
@@ -8830,7 +8841,24 @@ async function assignCaptain(playerId, teamId) {
       if (STATE.showRecap) return nav + leagueSwitcherDropdown + renderSeasonRecap();
        if (l.status === 'transition') content = renderTransition(); else if (l.status === 'lobby' && STATE.appTab !== 'commissioner') content = renderLobby(); else if (STATE.appTab === 'home') content = l.status === 'lobby' ? renderLobby() : renderHome(); else if (STATE.appTab === 'standings') content = renderStandings(); else if (STATE.appTab === 'schedule') content = renderSchedule(); else if (STATE.appTab === 'rosters') content = renderRosters(); else if (STATE.appTab === 'draft') content = renderDraft(); else if (STATE.appTab === 'playoffs') content = renderPlayoffs(); else if (STATE.appTab === 'commissioner') { if (l.status === 'lobby' && !STATE.commLobbyTab) STATE.commLobbyTab = 'captains'; content = renderComm(); } return `<div>${nav}${leagueSwitcherDropdown}${playoffBanner}${content}${STATE.modal ? renderModal() : ''}${renderMobileNav()}</div>`; }
     function renderApp() {
-      if (STATE.authLoading) return `<div style='min-height:100vh;background:#07110b;display:flex;align-items:center;justify-content:center'><div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:32px;color:rgba(255,255,255,.3)'>RYL</div></div>`;
+      if (STATE.authLoading) return `
+        <div style='min-height:100vh;background:linear-gradient(160deg,#07110b,#0b1220,#111827);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px'>
+          <div style='position:relative'>
+            <div style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:64px;color:#fff;letter-spacing:-2px;line-height:1'>RYL</div>
+            <div style='font-size:11px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:3px;text-align:center;margin-top:4px'>Run Your League</div>
+          </div>
+          <div style='display:flex;gap:6px;align-items:center;margin-top:8px'>
+            <div style='width:6px;height:6px;border-radius:50%;background:#16a34a;animation:splashDot 1.2s ease-in-out infinite'></div>
+            <div style='width:6px;height:6px;border-radius:50%;background:#16a34a;animation:splashDot 1.2s ease-in-out .2s infinite'></div>
+            <div style='width:6px;height:6px;border-radius:50%;background:#16a34a;animation:splashDot 1.2s ease-in-out .4s infinite'></div>
+          </div>
+          <style>
+            @keyframes splashDot {
+              0%,80%,100%{opacity:.2;transform:scale(.8)}
+              40%{opacity:1;transform:scale(1.2)}
+            }
+          </style>
+        </div>`;
       if (STATE.screen === 'confirm_email') return renderConfirmEmail();
       if (STATE.screen === 'onboarding') return renderOnboarding();
       if (STATE.showProfile) return renderProfileScreen();
