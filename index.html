@@ -3150,7 +3150,15 @@
       const g = STATE.league.games.find(x => x.id === gid);
       if (!g) return;
       g[side] = Math.max(0, (g[side] || 0) + delta);
-      R();
+      // Update DOM directly for instant feel — no full re-render flash
+      const scoreEl = document.querySelector(`[data-score-id="${gid}-${side}"]`);
+      if (scoreEl) {
+        scoreEl.textContent = g[side];
+      } else {
+        R(); // fallback if element not found
+        return;
+      }
+      queueSave();
     }
 
     function endGame(gid) {
@@ -5807,7 +5815,7 @@
                 <button onclick='adjustGameScore("${g.id}","${side}",1)' style='width:26px;height:26px;border-radius:6px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:12px;font-weight:700;color:#374151;cursor:pointer'>+1</button>
                 <button onclick='adjustGameScore("${g.id}","${side}",2)' style='width:26px;height:26px;border-radius:6px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:12px;font-weight:700;color:#374151;cursor:pointer'>+2</button>
                 <button onclick='adjustGameScore("${g.id}","${side}",3)' style='width:26px;height:26px;border-radius:6px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:12px;font-weight:700;color:#374151;cursor:pointer'>+3</button>
-                <span style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:#dc2626;min-width:32px;text-align:right'>${score??0}</span>
+                <span data-score-id="${g.id}-${side}" style='font-family:"Barlow Condensed",sans-serif;font-weight:900;font-size:24px;color:#dc2626;min-width:32px;text-align:right'>${score??0}</span>
               </div>` : (isFinal||isLive) ? `
               <div style='display:flex;align-items:center;gap:6px'>
                 ${won ? `<span style='font-size:14px;color:#94a3b8'>◄</span>` : ''}
