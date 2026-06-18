@@ -2044,6 +2044,7 @@
       commTab: 'gameday',            // active commissioner tools tab
       commLobbyTab: 'captains',      // active lobby commissioner tab
       teamJustAssigned: null,        // teamId just assigned to this player (triggers banner)
+      notifications: [],             // in-app notification queue [{id,icon,msg,color}]
       guideDismissed: {},            // which guide banners the commissioner has dismissed, keyed by stage
       showProfile: false,            // whether profile/settings screen is open
       profileEdit: null,             // profile fields being edited
@@ -2076,6 +2077,49 @@
     }
     window.openEmojiPicker = openEmojiPicker;
     window.setTeamEmoji = setTeamEmoji;
+
+    // ── In-app notification system ─────────────────────────────────
+    let _notifTimer = null;
+
+    function pushNotif(icon, msg, color) {
+      const id = uid();
+      if (!STATE.notifications) STATE.notifications = [];
+      STATE.notifications.push({ id, icon, msg, color: color || '#16a34a' });
+      renderOnly();
+      // Auto-dismiss after 5 seconds
+      clearTimeout(_notifTimer);
+      _notifTimer = setTimeout(() => {
+        if (STATE.notifications?.length) {
+          STATE.notifications.shift();
+          renderOnly();
+        }
+      }, 5000);
+    }
+
+    function dismissNotif(id) {
+      STATE.notifications = (STATE.notifications || []).filter(n => n.id !== id);
+      renderOnly();
+    }
+    window.dismissNotif = dismissNotif;
+
+    function renderNotifBanner() {
+      const notifs = STATE.notifications || [];
+      if (!notifs.length) return '';
+      const n = notifs[0];
+      return `<div style='position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:2000;width:calc(100% - 32px);max-width:480px;animation:notifSlideIn .3s cubic-bezier(.2,.9,.2,1)'>
+        <div style='background:linear-gradient(135deg,#07110b,#111827);border:1.5px solid ${n.color}55;border-left:4px solid ${n.color};border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.35)'>
+          <span style='font-size:22px;flex-shrink:0'>${n.icon}</span>
+          <span style='font-size:13px;font-weight:700;color:#fff;flex:1;line-height:1.4'>${n.msg}</span>
+          <button onclick="dismissNotif('${n.id}')" style='background:none;border:none;color:rgba(255,255,255,.4);font-size:18px;cursor:pointer;flex-shrink:0;padding:0'>×</button>
+        </div>
+      </div>
+      <style>
+        @keyframes notifSlideIn {
+          from { opacity:0; transform:translateX(-50%) translateY(-12px); }
+          to   { opacity:1; transform:translateX(-50%) translateY(0); }
+        }
+      </style>`;
+    }
 
     const NBA_TEAMS = [
       { name: 'Atlanta Hawks',           color: '#C8102E' },
@@ -2592,12 +2636,75 @@
           // Only skip if this is our own echo — always accept updates from other devices
           if (updated._saveId && updated._saveId === _lastSaveId) return;
           delete updated._saveId;
-          // Detect team assignment for players (in-app banner)
-          if (STATE.user && STATE.memberRole === 'player') {
-            const oldTeamId = STATE.league?.players?.find(p => p.userId === STATE.user.id)?.teamId;
-            const newTeamId = updated?.players?.find(p => p.userId === STATE.user.id)?.teamId;
-            if (!oldTeamId && newTeamId) STATE.teamJustAssigned = newTeamId;
+
+          const prev = STATE.league;
+          const myUserId = STATE.user?.id;
+          const role = STATE.memberRole;
+          const myTeamId = STATE.memberTeamId;
+
+          // ── Detect team assignment for players ──
+          if (myUserId && role === 'player') {
+            const oldTeamId = prev?.players?.find(p => p.userId === myUserId)?.teamId;
+            const newTeamId = updated?.players?.find(p => p.userId === myUserId)?.teamId;
+            if (!oldTeamId && newTeamId) {
+              STATE.teamJustAssigned = newTeamId;
+              const team = updated.teams?.find(t => t.id === newTeamId);
+              pushNotif('🎉', `You've been drafted by ${team?.name || 'a team'}!`, team?.color || '#16a34a');
+            }
           }
+
+          // ── Draft starts ──
+          if (prev?.draftState?.status !== 'active' && updated?.draftState?.status === 'active') {
+            if (role !== 'commissioner') {
+              pushNotif('🏀', 'Draft is live — get to your device!', '#16a34a');
+            }
+          }
+
+          // ── It's your turn on the clock (captain) ──
+          if (role === 'captain' && myTeamId && updated?.draftState?.status === 'active') {
+            const prevTid = prev?.draftState ? getPickTeam(prev.draftState, prev.teams) : null;
+            const newTid = updated?.draftState ? getPickTeam(updated.draftState, updated.teams) : null;
+            if (prevTid !== newTid && newTid === myTeamId) {
+              pushNotif('⚡', "You're on the clock — make your pick!", '#f59e0b');
+            }
+          }
+
+          // ── Your game goes live ──
+          if (myTeamId) {
+            const prevLive = prev?.games?.filter(g => g.status === 'live' && (g.home === myTeamId || g.away === myTeamId)) || [];
+            const newLive = updated?.games?.filter(g => g.status === 'live' && (g.home === myTeamId || g.away === myTeamId)) || [];
+            if (newLive.length > prevLive.length) {
+              const g = newLive.find(ng => !prevLive.find(pg => pg.id === ng.id));
+              if (g) {
+                const oppId = g.home === myTeamId ? g.away : g.home;
+                const opp = updated.teams?.find(t => t.id === oppId);
+                pushNotif('🔴', `Your game just started vs ${opp?.name || 'your opponent'}!`, '#ef4444');
+              }
+            }
+          }
+
+          // ── Your game goes final ──
+          if (myTeamId) {
+            const prevFinals = prev?.games?.filter(g => g.status === 'final' && (g.home === myTeamId || g.away === myTeamId)) || [];
+            const newFinals = updated?.games?.filter(g => g.status === 'final' && (g.home === myTeamId || g.away === myTeamId)) || [];
+            if (newFinals.length > prevFinals.length) {
+              const g = newFinals.find(ng => !prevFinals.find(pg => pg.id === ng.id));
+              if (g) {
+                const isHome = g.home === myTeamId;
+                const myScore = isHome ? (g.hs || 0) : (g.as || 0);
+                const oppScore = isHome ? (g.as || 0) : (g.hs || 0);
+                const won = myScore > oppScore;
+                const myTeam = updated.teams?.find(t => t.id === myTeamId);
+                pushNotif(won ? '🏆' : '💪', `Final — ${myTeam?.name || 'Your team'} ${won ? 'wins' : 'loses'} ${myScore}–${oppScore}`, won ? '#16a34a' : '#3b82f6');
+              }
+            }
+          }
+
+          // ── New game day announced ──
+          if ((prev?.currentDayGameNum || 1) < (updated?.currentDayGameNum || 1) && updated?.status === 'season') {
+            pushNotif('🏀', `Game Day ${updated.currentDayGameNum} is live!`, '#16a34a');
+          }
+
           STATE.league = updated;
           const idx = STATE.leagues.findIndex(l => l.id === leagueId);
           if (idx >= 0) STATE.leagues[idx] = updated;
@@ -8967,7 +9074,7 @@ async function assignCaptain(playerId, teamId) {
       if (STATE.showManualAssign) return nav + leagueSwitcherDropdown + renderManualAssignment();
       let content = ''; if (STATE.showChampCard) return nav + leagueSwitcherDropdown + renderChampionCard();
       if (STATE.showRecap) return nav + leagueSwitcherDropdown + renderSeasonRecap();
-       if (l.status === 'transition') content = renderTransition(); else if (l.status === 'lobby' && STATE.appTab !== 'commissioner') content = renderLobby(); else if (STATE.appTab === 'home') content = l.status === 'lobby' ? renderLobby() : renderHome(); else if (STATE.appTab === 'standings') content = renderStandings(); else if (STATE.appTab === 'schedule') content = renderSchedule(); else if (STATE.appTab === 'rosters') content = renderRosters(); else if (STATE.appTab === 'draft') content = renderDraft(); else if (STATE.appTab === 'playoffs') content = renderPlayoffs(); else if (STATE.appTab === 'commissioner') { if (l.status === 'lobby' && !STATE.commLobbyTab) STATE.commLobbyTab = 'captains'; content = renderComm(); } return `<div>${nav}${leagueSwitcherDropdown}${playoffBanner}${content}${STATE.modal ? renderModal() : ''}${renderMobileNav()}</div>`; }
+       if (l.status === 'transition') content = renderTransition(); else if (l.status === 'lobby' && STATE.appTab !== 'commissioner') content = renderLobby(); else if (STATE.appTab === 'home') content = l.status === 'lobby' ? renderLobby() : renderHome(); else if (STATE.appTab === 'standings') content = renderStandings(); else if (STATE.appTab === 'schedule') content = renderSchedule(); else if (STATE.appTab === 'rosters') content = renderRosters(); else if (STATE.appTab === 'draft') content = renderDraft(); else if (STATE.appTab === 'playoffs') content = renderPlayoffs(); else if (STATE.appTab === 'commissioner') { if (l.status === 'lobby' && !STATE.commLobbyTab) STATE.commLobbyTab = 'captains'; content = renderComm(); } return `<div>${nav}${leagueSwitcherDropdown}${playoffBanner}${content}${STATE.modal ? renderModal() : ''}${renderMobileNav()}${renderNotifBanner()}</div>`; }
     function renderApp() {
       if (STATE.authLoading) return `
         <div style='min-height:100vh;background:linear-gradient(160deg,#07110b,#0b1220,#111827);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px'>
@@ -8997,31 +9104,31 @@ async function assignCaptain(playerId, teamId) {
         if (STATE.justJoined) return renderJoinSuccess();
         const mobNav = renderMobileNav();
         if (STATE.memberRole === 'captain') {
-          if (STATE.league.status === 'lobby') return renderCaptainLobby() + mobNav;
+          if (STATE.league.status === 'lobby') return renderCaptainLobby() + mobNav + renderNotifBanner();
           if (STATE.league.status === 'draft' && STATE.league.draftState?.status === 'active' && (STATE.appTab === 'home' || !STATE.appTab)) STATE.appTab = 'draft';
-          if (STATE.appTab === 'draft' || STATE.draftPreviewMode) return renderCaptainNav() + renderDraft() + mobNav;
+          if (STATE.appTab === 'draft' || STATE.draftPreviewMode) return renderCaptainNav() + renderDraft() + mobNav + renderNotifBanner();
           const captainModal = STATE.modal ? renderModal() : '';
           const captainDraftDone = STATE.league.draftState?.status === 'done' || STATE.league.status === 'season' || STATE.league.status === 'playoffs' || STATE.league.status === 'complete';
-          if (STATE.appTab === 'home' || !STATE.appTab) return renderCaptainNav() + (captainDraftDone ? renderMemberSeasonHome() : renderCaptainHome()) + captainModal + mobNav;
-          if (STATE.appTab === 'standings') return renderCaptainNav() + renderStandings() + captainModal + mobNav;
-          if (STATE.appTab === 'schedule') return renderCaptainNav() + renderSchedule() + captainModal + mobNav;
-          if (STATE.appTab === 'rosters') return renderCaptainNav() + renderRosters() + captainModal + mobNav;
-          if (STATE.appTab === 'playoffs') return renderCaptainNav() + renderPlayoffs() + captainModal + mobNav;
-          return renderCaptainNav() + (captainDraftDone ? renderMemberSeasonHome() : renderCaptainHome()) + captainModal + mobNav;
+          if (STATE.appTab === 'home' || !STATE.appTab) return renderCaptainNav() + (captainDraftDone ? renderMemberSeasonHome() : renderCaptainHome()) + captainModal + mobNav + renderNotifBanner();
+          if (STATE.appTab === 'standings') return renderCaptainNav() + renderStandings() + captainModal + mobNav + renderNotifBanner();
+          if (STATE.appTab === 'schedule') return renderCaptainNav() + renderSchedule() + captainModal + mobNav + renderNotifBanner();
+          if (STATE.appTab === 'rosters') return renderCaptainNav() + renderRosters() + captainModal + mobNav + renderNotifBanner();
+          if (STATE.appTab === 'playoffs') return renderCaptainNav() + renderPlayoffs() + captainModal + mobNav + renderNotifBanner();
+          return renderCaptainNav() + (captainDraftDone ? renderMemberSeasonHome() : renderCaptainHome()) + captainModal + mobNav + renderNotifBanner();
         }
         if (STATE.memberRole === 'player') {
           const draftDone = STATE.league.draftState?.status === 'done' || STATE.league.status === 'season' || STATE.league.status === 'playoffs' || STATE.league.status === 'complete';
           if (!draftDone) {
-            if (STATE.draftPreviewMode || STATE.appTab === 'draft') return renderDraft() + mobNav;
-            return renderWaiting() + mobNav;
+            if (STATE.draftPreviewMode || STATE.appTab === 'draft') return renderDraft() + mobNav + renderNotifBanner();
+            return renderWaiting() + mobNav + renderNotifBanner();
           }
           const playerNav = renderPlayerNav();
           const playerModal = STATE.modal ? renderModal() : '';
-          if (STATE.appTab === 'standings') return playerNav + renderStandings() + playerModal + mobNav;
-          if (STATE.appTab === 'schedule') return playerNav + renderSchedule() + playerModal + mobNav;
-          if (STATE.appTab === 'rosters') return playerNav + renderRosters() + playerModal + mobNav;
-          if (STATE.appTab === 'playoffs') return playerNav + renderPlayoffs() + playerModal + mobNav;
-          return playerNav + renderMemberSeasonHome() + playerModal + mobNav;
+          if (STATE.appTab === 'standings') return playerNav + renderStandings() + playerModal + mobNav + renderNotifBanner();
+          if (STATE.appTab === 'schedule') return playerNav + renderSchedule() + playerModal + mobNav + renderNotifBanner();
+          if (STATE.appTab === 'rosters') return playerNav + renderRosters() + playerModal + mobNav + renderNotifBanner();
+          if (STATE.appTab === 'playoffs') return playerNav + renderPlayoffs() + playerModal + mobNav + renderNotifBanner();
+          return playerNav + renderMemberSeasonHome() + playerModal + mobNav + renderNotifBanner();
         }
       } if (STATE.screen === 'myleagues') return renderMyLeagues(); if (STATE.screen === 'landing') return renderLanding(); if (STATE.screen === 'wizard') return renderWizard(); if (STATE.screen === 'join') return renderJoin(); if (STATE.screen === 'app') return renderMainApp(); return renderMyLeagues(); }
     document.addEventListener('visibilitychange', () => {
