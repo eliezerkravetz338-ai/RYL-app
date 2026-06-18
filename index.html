@@ -4084,8 +4084,7 @@
               </div>
 
               <!-- Submit -->
-              <button onclick='submitOnboarding()' style='width:100%;padding:14px;background:${accentColor};color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;transition:background .2s' ${!p.display_name||!p.position||!p.skill||!p.nba_team?'disabled style="width:100%;padding:14px;background:#e2e8f0;color:#94a3b8;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:not-allowed"':''}>
-                Let's Go →
+              <button onclick='submitOnboarding()' ${!p.display_name||!p.position||!p.skill||!p.nba_team?'disabled':''} style='width:100%;padding:14px;background:${!p.display_name||!p.position||!p.skill||!p.nba_team?"#e2e8f0":accentColor};color:${!p.display_name||!p.position||!p.skill||!p.nba_team?"#94a3b8":"#fff"};border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:${!p.display_name||!p.position||!p.skill||!p.nba_team?"not-allowed":"pointer"};transition:background .2s'>                Let's Go →
               </button>
               ${!p.display_name||!p.position||!p.skill||!p.nba_team ? `<div style='text-align:center;font-size:11px;color:#94a3b8;margin-top:8px'>Fill in all fields to continue</div>` : ''}
             </div>
