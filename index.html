@@ -3842,7 +3842,7 @@
         { k: 'league', lb: 'The League' },
       ];
 
-      const tabBar = `<div style='display:flex;border-bottom:2px solid var(--b1);background:#fff;position:sticky;top:56px;z-index:9'>
+      const tabBar = `<div style='display:flex;border-bottom:2px solid var(--b1);background:#fff;position:sticky;top:44px;z-index:9'>
         ${tabs.map(t => `<button onclick="STATE.captainTab='${t.k}';R()" style='flex:1;padding:12px 8px;border:none;background:none;font-size:13px;font-weight:${captainTab===t.k?800:500};color:${captainTab===t.k?"var(--t1)":"var(--t3)"};border-bottom:2px solid ${captainTab===t.k?"var(--t1)":"transparent"};margin-bottom:-2px;cursor:pointer'>${t.lb}</button>`).join('')}
       </div>`;
 
