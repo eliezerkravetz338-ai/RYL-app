@@ -9189,11 +9189,11 @@ async function assignCaptain(playerId, teamId) {
         const mobNav = renderMobileNav();
         if (STATE.memberRole === 'captain') {
           if (STATE.league.status === 'lobby') return renderCaptainLobby() + mobNav + renderNotifBanner();
-          if (STATE.showMyTeam) return renderCaptainNav() + renderMyTeamScreen() + captainModal + mobNav + renderNotifBanner();
           if (STATE.league.status === 'draft' && STATE.league.draftState?.status === 'active' && (STATE.appTab === 'home' || !STATE.appTab)) STATE.appTab = 'draft';
           if (STATE.appTab === 'draft' || STATE.draftPreviewMode) return renderCaptainNav() + renderDraft() + mobNav + renderNotifBanner();
           const captainModal = STATE.modal ? renderModal() : '';
           const captainDraftDone = STATE.league.draftState?.status === 'done' || STATE.league.status === 'season' || STATE.league.status === 'playoffs' || STATE.league.status === 'complete';
+          if (STATE.showMyTeam) return renderCaptainNav() + renderMyTeamScreen() + captainModal + mobNav + renderNotifBanner();
           if (STATE.appTab === 'home' || !STATE.appTab) return renderCaptainNav() + (captainDraftDone ? renderMemberSeasonHome() : renderCaptainHome()) + captainModal + mobNav + renderNotifBanner();
           if (STATE.appTab === 'standings') return renderCaptainNav() + renderStandings() + captainModal + mobNav + renderNotifBanner();
           if (STATE.appTab === 'schedule') return renderCaptainNav() + renderSchedule() + captainModal + mobNav + renderNotifBanner();
